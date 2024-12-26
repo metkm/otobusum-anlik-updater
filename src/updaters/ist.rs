@@ -1,10 +1,18 @@
 use std::collections::HashMap;
 
-use reqwest::header::HeaderMap;
 use sqlx::{PgPool, QueryBuilder};
+use reqwest::header::HeaderMap;
+use tracing::info;
 
-use crate::{models::{ist::IstTokensResponse, soap::{BusLineResponseSoap, BusLineSoap}}, updater::Updater};
+use crate::{
+    models::{
+        ist::IstTokensResponse,
+        soap::{BusLineResponseSoap, BusLineSoap},
+    },
+    updater::Updater,
+};
 
+#[derive(Debug)]
 pub struct IstUpdater {
     pub client: reqwest::Client,
     pub headers: HeaderMap,
@@ -53,8 +61,7 @@ impl Updater for IstUpdater {
     }
 
     async fn insert_lines(&self, db: &PgPool) -> Result<(), anyhow::Error> {
-        let body = format!(
-            r#"
+        let body = r#"
         <soap:Envelope
             xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
                 <soap:Body>
@@ -64,10 +71,11 @@ impl Updater for IstUpdater {
                     </GetHat_json>
                 </soap:Body>
             </soap:Envelope>
-        "#
-        );
+        "#;
 
-        let response = self.client
+        info!("getting lines");
+        let response = self
+            .client
             .post("https://api.ibb.gov.tr/iett/UlasimAnaVeri/HatDurakGuzergah.asmx")
             .header("Content-Type", "text/xml; charset=UTF-8")
             .header("SOAPAction", r#""http://tempuri.org/GetHat_json""#)
@@ -77,6 +85,7 @@ impl Updater for IstUpdater {
 
         let text = response.text().await?;
 
+        info!("parsing lines");
         let parsed = serde_xml_rs::from_str::<BusLineResponseSoap>(&text)?;
         let bus_lines = serde_json::from_str::<Vec<BusLineSoap>>(&parsed.content.content.content)?;
 
@@ -90,7 +99,7 @@ impl Updater for IstUpdater {
             .execute(db)
             .await?;
 
-        println!("inserted {:?} rows", lines_insert_result.rows_affected());
+        info!("inserted {:?} rows", lines_insert_result.rows_affected());
 
         Ok(())
     }
