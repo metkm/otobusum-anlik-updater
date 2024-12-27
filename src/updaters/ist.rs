@@ -35,7 +35,7 @@ impl IstUpdater {
 }
 
 impl Updater for IstUpdater {
-    async fn get_credentials(&mut self) -> Result<IstTokensResponse, reqwest::Error> {
+    async fn get_credentials(&mut self) -> Result<(), reqwest::Error> {
         let mut body = HashMap::new();
         body.insert("client_id", std::env::var("IBB_CLIENT_ID").unwrap());
         body.insert("client_secret", std::env::var("IBB_CLIENT_SECRET").unwrap());
@@ -57,7 +57,7 @@ impl Updater for IstUpdater {
             format!("Bearer {}", response.access_token).parse().unwrap(),
         );
 
-        Ok(response)
+        Ok(())
     }
 
     async fn insert_lines(&self, db: &PgPool) -> Result<(), anyhow::Error> {

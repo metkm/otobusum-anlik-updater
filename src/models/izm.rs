@@ -18,3 +18,21 @@ pub struct IzmLinesResult {
 pub struct IzmLinesResponse {
     pub result: IzmLinesResult,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LoginBody {
+    #[serde(rename(serialize = "userName"))]
+    pub user_name: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LoginBodyData {
+    #[serde(rename(deserialize = "Item1"))]
+    pub token: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LoginBodyResponse {
+    pub data: LoginBodyData,
+}
