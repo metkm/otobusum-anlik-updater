@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use sqlx::{PgPool, QueryBuilder};
 use reqwest::header::HeaderMap;
+use sqlx::{PgPool, QueryBuilder};
 use tracing::info;
 
 use crate::{
