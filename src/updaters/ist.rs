@@ -103,4 +103,8 @@ impl Updater for IstUpdater {
 
         Ok(())
     }
+
+    async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+        Ok(())
+    }
 }
