@@ -6,6 +6,10 @@ pub struct IzmLine {
     pub line_code: u32,
     #[serde(alias = "HAT_ADI")]
     pub line_name: String,
+    #[serde(alias = "HAT_BASLANGIC")]
+    pub line_start: String,
+    #[serde(alias = "HAT_BITIS")]
+    pub line_end: String,
 }
 
 #[derive(Serialize, Deserialize)]

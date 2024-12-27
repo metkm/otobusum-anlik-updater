@@ -1,9 +1,9 @@
 use reqwest::header::HeaderMap;
-use sqlx::PgPool;
+use sqlx::{PgPool, QueryBuilder};
 use tracing::info;
 
 use crate::{
-    models::izm::{IzmLine, IzmLinesResponse, LoginBody, LoginBodyResponse},
+    models::{database::DatabaseRoute, izm::{IzmLine, IzmLinesResponse, LoginBody, LoginBodyResponse}},
     updater::Updater,
 };
 
@@ -106,37 +106,77 @@ impl Updater for IzmUpdater {
             }
         }
 
-        let line_codes: Vec<String> = lines
-            .iter()
-            .map(|x| x.line_code.to_string())
-            .collect::<Vec<String>>();
-
-        let line_titles: Vec<String> = lines
-            .iter()
-            .map(|x| x.line_name.to_string())
-            .collect::<Vec<String>>();
-
-        let line_cities = lines
-            .iter()
-            .map(|_| "istanbul".to_string())
-            .collect::<Vec<String>>();
-
-        let lines_insert_result = sqlx::query!(
-            "
-                INSERT INTO lines (code, title, city)
-                SELECT * FROM UNNEST ($1::text[], $2::text[], $3::text[])
-                ON CONFLICT (code, city) DO UPDATE SET
+        let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, title, city)")
+            .push_values(&lines, |mut b, record| {
+                b.push_bind(record.line_code.to_string());
+                b.push_bind(record.line_name.clone());
+                b.push_bind("izmir");
+            })
+            .push(
+                "ON CONFLICT (code, city) DO UPDATE SET
                     code = EXCLUDED.code,
                     city = EXCLUDED.city
-            ",
-            &line_codes[..],
-            &line_titles[..],
-            &line_cities[..],
-        )
-        .execute(db)
-        .await?;
+            ")
+            .build()
+            .execute(db)
+            .await?;
 
-        info!("inserted {:?} rows", lines_insert_result.rows_affected());
+        info!(
+            "inserted/updated {:?} rows",
+            lines_insert_result.rows_affected()
+        );
+        info!("also creating default routes for every line");
+
+        let route_codes = lines.iter()
+            .map(|line| {
+                [
+                    DatabaseRoute {
+                        agency_id: Some(1),
+                        route_short_name: Some(line.line_code.to_string()),
+                        route_long_name: Some(format!("{} - {}", line.line_start, line.line_end)),
+                        route_type: Some(3),
+                        route_code: Some(format!("{}_G_D0", line.line_code)),
+                        route_desc: None,
+                        city: "izmir".to_string()
+                    },
+                    DatabaseRoute {
+                        agency_id: Some(1),
+                        route_short_name: Some(line.line_code.to_string()),
+                        route_long_name: Some(format!("{} - {}", line.line_start, line.line_end)),
+                        route_type: Some(3),
+                        route_code: Some(format!("{}_D_D0", line.line_code)),
+                        route_desc: None,
+                        city: "izmir".to_string()
+                    },
+                ]
+            })
+            .flatten()
+            .collect::<Vec<DatabaseRoute>>();
+        
+        let routes_insert_result = QueryBuilder::new("INSERT INTO routes (agency_id, route_short_name, route_long_name, route_type, route_desc, route_code, city)")
+            .push_values(route_codes, |mut b, record| {
+                b.push_bind(record.agency_id);
+                b.push_bind(record.route_short_name);
+                b.push_bind(record.route_long_name);
+                b.push_bind(record.route_type);
+                b.push_bind(record.route_desc);
+                b.push_bind(record.route_code);
+                b.push_bind("izmir");
+            })
+            .push("
+                ON CONFLICT (route_code, city) DO UPDATE SET
+                    agency_id=EXCLUDED.agency_id,
+                    route_short_name=EXCLUDED.route_short_name,
+                    route_long_name=EXCLUDED.route_long_name,
+                    route_type=EXCLUDED.route_type,
+                    route_desc=EXCLUDED.route_desc,
+                    route_code=EXCLUDED.route_code
+            ")
+            .build()
+            .execute(db)
+            .await?;
+
+        info!("inserted/updated {} route rows", routes_insert_result.rows_affected());
 
         Ok(())
     }
