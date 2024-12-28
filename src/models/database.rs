@@ -21,7 +21,7 @@ pub struct DatabaseLine {
     pub city: String,
 }
 
-#[derive(Serialize, Deserialize, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, sqlx::Type)]
 pub struct LatLng {
     pub lat: f64,
     pub lng: f64,

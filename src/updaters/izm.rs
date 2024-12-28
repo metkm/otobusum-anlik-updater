@@ -2,7 +2,7 @@ use std::{collections::HashSet, str::FromStr};
 
 use chrono::NaiveTime;
 use reqwest::header::HeaderMap;
-use sqlx::{PgPool, QueryBuilder};
+use sqlx::{PgPool, QueryBuilder, types::Json};
 use tracing::{info, warn};
 
 use crate::{
@@ -212,7 +212,8 @@ impl Updater for IzmUpdater {
                 None => {
                     let search_results = self
                         .client
-                        .get("https://appapi.eshot.gov.tr/api/Assistant/getLineOrStationByName")
+                        .post("https://appapi.eshot.gov.tr/api/Assistant/getLineOrStationByName")
+                        .headers(self.headers.clone())
                         .json(&line.code.to_string())
                         .send()
                         .await?
@@ -244,6 +245,7 @@ impl Updater for IzmUpdater {
             let line_data = self
                 .client
                 .post("https://appapi.eshot.gov.tr/api/Assistant/getLine")
+                .headers(self.headers.clone())
                 .body(result.id.to_string())
                 .send()
                 .await?
@@ -262,12 +264,18 @@ impl Updater for IzmUpdater {
                     "INSERT INTO stops (stop_code, stop_name, x_coord, y_coord, city)",
                 )
                 .push_values(&route.stations, |mut b, station| {
-                    b.push_bind(&station.code)
+                    b.push_bind(station.code.parse::<i32>().unwrap())
                         .push_bind(&station.name)
                         .push_bind(&station.lng)
                         .push_bind(&station.lat)
                         .push_bind("izmir");
                 })
+                .push(
+                    "ON CONFLICT (stop_code, city) DO UPDATE SET
+                            stop_name=EXCLUDED.stop_name,
+                            x_coord=EXCLUDED.x_coord,
+                            y_coord=EXCLUDED.y_coord",
+                )
                 .build()
                 .execute(db)
                 .await?;
@@ -288,6 +296,7 @@ impl Updater for IzmUpdater {
                         .push_bind(&route_code)
                         .push_bind("izmir");
                 })
+                .push("ON CONFLICT DO NOTHING")
                 .build()
                 .execute(db)
                 .await?;
@@ -316,14 +325,21 @@ impl Updater for IzmUpdater {
                     }
                 }
 
-                let insert_route_paths =
-                    QueryBuilder::new("INSERT INTO route_paths (route_code, route_path, city)")
-                        .push_bind(&route_code)
-                        .push_bind(&latlngs)
-                        .push_bind("izmir")
-                        .build()
-                        .execute(db)
-                        .await?;
+                let insert_route_paths = sqlx::query!(
+                    r#"
+                        INSERT INTO
+                            route_paths (route_code, route_path, city)
+                        VALUES
+                            ($1, $2, $3)
+                        ON CONFLICT (route_code, city) DO UPDATE SET
+                            route_path=EXCLUDED.route_path
+                    "#,
+                    &route_code,
+                    Json(latlngs) as _,
+                    "izmir"
+                )
+                .execute(db)
+                .await?;
 
                 info!(
                     "inserted {} route paths for {}",
@@ -337,8 +353,8 @@ impl Updater for IzmUpdater {
                 let saturday = 0b0100000;
 
                 let mut timetable = DatabaseTimetable {
-                    route_code: route_code,
                     city: "izmir".to_string(),
+                    route_code,
                     ..Default::default()
                 };
 
@@ -364,7 +380,16 @@ impl Updater for IzmUpdater {
 
                 let inserted_timetable = sqlx::query!("
                     INSERT INTO timetable (route_code, city, sunday, monday, tuesday, wednesday, thursday, friday, saturday)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ON CONFLICT (route_code, city) DO UPDATE SET
+                        sunday=EXCLUDED.sunday,
+                        monday=EXCLUDED.monday,
+                        tuesday=EXCLUDED.tuesday,
+                        wednesday=EXCLUDED.wednesday,
+                        thursday=EXCLUDED.thursday,
+                        friday=EXCLUDED.friday,
+                        saturday=EXCLUDED.saturday
+                    ",
                     timetable.route_code,
                     timetable.city,
                     &timetable.sunday,

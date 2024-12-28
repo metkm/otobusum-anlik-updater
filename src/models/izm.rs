@@ -96,15 +96,13 @@ pub struct EshotTimetable {
 
 #[derive(Serialize, Deserialize)]
 pub struct EShotLineData {
-    #[serde(alias = "lineId")]
-    pub line_id: i32,
-    pub starting: String,
-    pub ending: String,
-    pub direction: Direction,
+    // #[serde(alias = "lineId")]
+    // pub line_id: i32,
+    // pub starting: String,
+    // pub ending: String,
+    pub direction: i32,
     pub tracks: Vec<String>,
     pub stations: Vec<EshotLineStation>,
     pub times: Vec<EshotTimetable>,
-    pub id: i32,
-    pub name: String,
-    pub code: String,
+    // pub id: i32,
 }

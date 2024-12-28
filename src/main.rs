@@ -16,8 +16,9 @@ async fn main() -> anyhow::Result<()> {
 
     let mut izm_updater = updaters::izm::IzmUpdater::new();
 
-    izm_updater.insert_lines(&pool).await?;
-    // izm_updater.get_credentials().await?;
+    // izm_updater.insert_lines(&pool).await?;
+    izm_updater.get_credentials().await?;
+    izm_updater.insert_line_stops(&pool).await?;
 
     // let mut ist_updater = updaters::ist::IstUpdater::new();
 
