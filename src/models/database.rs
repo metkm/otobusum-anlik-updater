@@ -14,6 +14,7 @@ pub struct DatabaseRoute {
     // pub route_path: Option<sqlx::types::JsonValue>,
 }
 
+#[derive(Debug)]
 pub struct DatabaseLine {
     pub id: i32,
     pub code: String,

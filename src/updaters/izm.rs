@@ -123,8 +123,7 @@ impl Updater for IzmUpdater {
             })
             .push(
                 "ON CONFLICT (code, city) DO UPDATE SET
-                    code = EXCLUDED.code,
-                    city = EXCLUDED.city
+                    title = EXCLUDED.title
             ",
             )
             .build()
@@ -139,7 +138,7 @@ impl Updater for IzmUpdater {
 
         let route_codes = lines
             .iter()
-            .map(|line| {
+            .flat_map(|line| {
                 [
                     DatabaseRoute {
                         agency_id: Some(1),
@@ -161,7 +160,6 @@ impl Updater for IzmUpdater {
                     },
                 ]
             })
-            .flatten()
             .collect::<Vec<DatabaseRoute>>();
 
         let routes_insert_result = QueryBuilder::new("INSERT INTO routes (agency_id, route_short_name, route_long_name, route_type, route_desc, route_code, city)")
@@ -266,8 +264,8 @@ impl Updater for IzmUpdater {
                 .push_values(&route.stations, |mut b, station| {
                     b.push_bind(station.code.parse::<i32>().unwrap())
                         .push_bind(&station.name)
-                        .push_bind(&station.lng)
-                        .push_bind(&station.lat)
+                        .push_bind(station.lng)
+                        .push_bind(station.lat)
                         .push_bind("izmir");
                 })
                 .push(
