@@ -343,7 +343,7 @@ impl Updater for IstUpdater {
                 .line
                 .split("|")
                 .flat_map(|part| {
-                    let res = part
+                    part
                         .strip_prefix("LINESTRING (")
                         .and_then(|rest| rest.strip_suffix(")"))
                         .and_then(|inner| Some(inner.split(",")))
@@ -359,9 +359,7 @@ impl Updater for IstUpdater {
                                 .collect::<Vec<LatLng>>();
 
                             Some(result)
-                        });
-
-                    res
+                        })
                 })
                 .flatten()
                 .collect::<Vec<LatLng>>();
