@@ -111,7 +111,7 @@ impl Updater for IstUpdater {
         Ok(())
     }
 
-    async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_routes(&self, db: &PgPool) -> Result<(), anyhow::Error> {
         let lines = sqlx::query_as!(
             DatabaseLine,
             r#"
@@ -127,8 +127,6 @@ impl Updater for IstUpdater {
         )
         .fetch_all(db)
         .await?;
-
-        info!("found {} lines", lines.len());
 
         for line in lines {
             for direction in &[119, 120] {
@@ -181,7 +179,33 @@ impl Updater for IstUpdater {
                     "inserted/updated {} route rows",
                     routes_insert_result.rows_affected()
                 );
+            }
+        }
 
+        Ok(())
+    }
+
+    async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+        let lines = sqlx::query_as!(
+            DatabaseLine,
+            r#"
+                SELECT
+                    *
+                FROM
+                    lines
+                WHERE
+                    city = 'istanbul'
+                ORDER BY
+                    code
+            "#
+        )
+        .fetch_all(db)
+        .await?;
+
+        info!("found {} lines", lines.len());
+
+        for line in lines {
+            for direction in &[119, 120] {
                 info!("getting route stops");
                 let stops_body = &serde_json::json!({
                     "alias": "mainGetRoute",
@@ -202,15 +226,21 @@ impl Updater for IstUpdater {
                     .await?;
 
                 let insert_line_stops_result = QueryBuilder::new(
-                    "INSERT INTO line_stops (line_code, stop_code, city, route_code)",
+                    "INSERT INTO line_stops (line_code, stop_code, stop_order, city, route_code)",
                 )
                 .push_values(&route_stops, |mut b, record| {
                     b.push_bind(&line.code)
                         .push_bind(&record.stop_code)
+                        .push_bind(&record.stop_order)
                         .push_bind("istanbul")
                         .push_bind(&record.route_code);
                 })
-                .push("ON CONFLICT DO NOTHING")
+                .push(
+                    "ON CONFLICT (route_code, stop_code, city)
+                    DO UPDATE SET
+                        stop_order=EXCLUDED.stop_order
+                ",
+                )
                 .build()
                 .execute(db)
                 .await?;

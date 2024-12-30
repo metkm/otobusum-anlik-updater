@@ -193,6 +193,11 @@ impl Updater for IzmUpdater {
         Ok(())
     }
 
+    async fn insert_routes(&self, _db: &PgPool) -> Result<(), anyhow::Error> {
+        info!("routes are inserted for izmir when lines are inserted");
+        Ok(())
+    }
+
     async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error> {
         info!("getting lines");
 

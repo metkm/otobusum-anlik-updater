@@ -24,6 +24,7 @@ async fn main() -> anyhow::Result<()> {
 
     ist_updater.insert_lines(&pool).await?;
     ist_updater.get_credentials().await?;
+    ist_updater.insert_routes(&pool).await?;
     ist_updater.insert_line_stops(&pool).await?;
 
     Ok(())
