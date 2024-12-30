@@ -423,4 +423,9 @@ impl Updater for IzmUpdater {
         info!("route paths for izmir inserted when line stops are inserted");
         Ok(())
     }
+
+    async fn insert_timetable(&self, _db: &PgPool) -> Result<(), anyhow::Error> {
+        info!("timetable for izmir inserted when line stops are inserted");
+        Ok(())
+    }
 }

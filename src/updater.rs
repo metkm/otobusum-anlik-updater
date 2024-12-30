@@ -6,4 +6,5 @@ pub trait Updater {
     async fn insert_routes(&self, db: &PgPool) -> Result<(), anyhow::Error>;
     async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error>;
     async fn insert_route_paths(&self, db: &PgPool) -> Result<(), anyhow::Error>;
+    async fn insert_timetable(&self, db: &PgPool) -> Result<(), anyhow::Error>;
 }

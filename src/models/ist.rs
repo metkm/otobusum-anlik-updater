@@ -65,3 +65,36 @@ impl PartialEq for IstLineStopsResponse {
 pub struct IstRoutePathResponse {
     pub line: String,
 }
+
+#[derive(Serialize, Deserialize)]
+pub enum DayType {
+    I,
+    C,
+    P,
+}
+
+impl PartialEq for DayType {
+    fn eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct IstTimetableResponse {
+    #[serde(alias = "K_ORER_SGUZERGAH")]
+    pub route_code: String,
+    #[serde(alias = "K_ORER_DTSAATGIDIS")]
+    pub time: String,
+    #[serde(alias = "K_ORER_SGUNTIPI")]
+    pub day_type: DayType,
+}
+
+//   K_ORER_DTSAATGIDIS: string
+//   K_ORER_NDEPARNO: number
+//   K_ORER_SGUNTIPI: "I" | "C" | "P"
+//   K_ORER_SGUZERGAH: string
+//   K_ORER_SHAREKETTIPI: string
+//   K_ORER_SSERVISTIPI: string
+//   K_ORER_SYON: string
+//   GUZERGAH_GUZERGAH_ISARETI: any
+//   GUZERGAH_HAT_KODU: string

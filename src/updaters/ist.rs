@@ -1,14 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
+use chrono::NaiveDateTime;
 use reqwest::header::HeaderMap;
 use sqlx::{PgPool, QueryBuilder, types::Json};
 use tracing::{info, warn};
 
 use crate::{
     models::{
-        database::{DatabaseLine, DatabaseRoute, LatLng},
+        database::{DatabaseLine, DatabaseRoute, DatabaseTimetable, LatLng},
         ist::{
-            IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathResponse, IstTokensResponse,
+            DayType, IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathResponse,
+            IstTimetableResponse, IstTokensResponse,
         },
         soap::{BusLineResponseSoap, BusLineSoap},
     },
@@ -335,7 +337,10 @@ impl Updater for IstUpdater {
                 .await?;
 
             let Some(first) = line_response.get(0) else {
-                warn!("route path not found for {}", route.route_code.as_ref().unwrap());
+                warn!(
+                    "route path not found for {}",
+                    route.route_code.as_ref().unwrap()
+                );
                 continue;
             };
 
@@ -343,8 +348,7 @@ impl Updater for IstUpdater {
                 .line
                 .split("|")
                 .flat_map(|part| {
-                    part
-                        .strip_prefix("LINESTRING (")
+                    part.strip_prefix("LINESTRING (")
                         .and_then(|rest| rest.strip_suffix(")"))
                         .and_then(|inner| Some(inner.split(",")))
                         .and_then(|coords| {
@@ -392,6 +396,111 @@ impl Updater for IstUpdater {
 
             info!("sleeping for 5 seconds");
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        }
+
+        Ok(())
+    }
+
+    async fn insert_timetable(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+        let lines = sqlx::query_as!(
+            DatabaseLine,
+            r#"
+                SELECT
+                    *
+                FROM
+                    lines
+                WHERE
+                    city = 'istanbul'
+                ORDER BY
+                    code
+            "#
+        )
+        .fetch_all(db)
+        .await?;
+
+        for line in lines {
+            let timetable_body = serde_json::json!({
+                "alias": "akyolbilGetTimeTable",
+                "data": {
+                    "HATYONETIM.HAT.HAT_KODU": &line.code
+                }
+            });
+
+            let timetable_response = self
+                .client
+                .post("https://ntcapi.iett.istanbul/service")
+                .body(timetable_body.to_string())
+                .send()
+                .await?
+                .json::<Vec<IstTimetableResponse>>()
+                .await?;
+
+            let mut timetables_grouped: HashMap<String, Vec<IstTimetableResponse>> = HashMap::new();
+            for timetable in timetable_response {
+                if let Some(tables) = timetables_grouped.get_mut(&timetable.route_code) {
+                    tables.push(timetable);
+                } else {
+                    timetables_grouped.insert(timetable.route_code.clone(), vec![timetable]);
+                }
+            }
+
+            for (route_code, timetables) in timetables_grouped {
+                let mut timetable_to_insert = DatabaseTimetable {
+                    city: "istanbul".to_string(),
+                    route_code,
+                    ..Default::default()
+                };
+
+                for timetable in timetables {
+                    let parsed =
+                        NaiveDateTime::parse_from_str(&timetable.time, "%Y-%m-%d %H:%M:%S")
+                            .unwrap();
+
+                    let time = parsed.time();
+
+                    if timetable.day_type == DayType::I {
+                        timetable_to_insert.monday.push(time);
+                        timetable_to_insert.tuesday.push(time);
+                        timetable_to_insert.wednesday.push(time);
+                        timetable_to_insert.thursday.push(time);
+                        timetable_to_insert.friday.push(time);
+                    } else if timetable.day_type == DayType::C {
+                        timetable_to_insert.saturday.push(time);
+                    } else if timetable.day_type == DayType::P {
+                        timetable_to_insert.sunday.push(time);
+                    }
+                }
+
+                let inserted_timetable = sqlx::query!("
+                    INSERT INTO timetable (route_code, city, sunday, monday, tuesday, wednesday, thursday, friday, saturday)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ON CONFLICT (route_code, city) DO UPDATE SET
+                        sunday=EXCLUDED.sunday,
+                        monday=EXCLUDED.monday,
+                        tuesday=EXCLUDED.tuesday,
+                        wednesday=EXCLUDED.wednesday,
+                        thursday=EXCLUDED.thursday,
+                        friday=EXCLUDED.friday,
+                        saturday=EXCLUDED.saturday
+                    ",
+                    timetable_to_insert.route_code,
+                    timetable_to_insert.city,
+                    &timetable_to_insert.sunday,
+                    &timetable_to_insert.monday,
+                    &timetable_to_insert.tuesday,
+                    &timetable_to_insert.wednesday,
+                    &timetable_to_insert.thursday,
+                    &timetable_to_insert.friday,
+                    &timetable_to_insert.saturday
+                )
+                    .execute(db)
+                    .await?;
+
+                info!(
+                    "inserted {} timetable row",
+                    inserted_timetable.rows_affected()
+                );
+            }
         }
 
         Ok(())
