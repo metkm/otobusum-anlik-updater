@@ -418,18 +418,22 @@ impl Updater for IstUpdater {
         .fetch_all(db)
         .await?;
 
+        info!("got {} lines for timetable function", lines.len());
+
         for line in lines {
-            let timetable_body = serde_json::json!({
+            let timetable_body = &serde_json::json!({
                 "alias": "akyolbilGetTimeTable",
                 "data": {
-                    "HATYONETIM.HAT.HAT_KODU": &line.code
+                    "HATYONETIM.GUZERGAH.HAT_KODU": &line.code
                 }
             });
 
+            info!("getting timetable for {}", &line.code);
             let timetable_response = self
                 .client
                 .post("https://ntcapi.iett.istanbul/service")
                 .body(timetable_body.to_string())
+                .headers(self.headers.clone())
                 .send()
                 .await?
                 .json::<Vec<IstTimetableResponse>>()
@@ -452,11 +456,10 @@ impl Updater for IstUpdater {
                 };
 
                 for timetable in timetables {
-                    let parsed =
+                    let time =
                         NaiveDateTime::parse_from_str(&timetable.time, "%Y-%m-%d %H:%M:%S")
-                            .unwrap();
-
-                    let time = parsed.time();
+                            .unwrap()
+                            .time();
 
                     if timetable.day_type == DayType::I {
                         timetable_to_insert.monday.push(time);
@@ -501,6 +504,9 @@ impl Updater for IstUpdater {
                     inserted_timetable.rows_affected()
                 );
             }
+
+            info!("sleeping for 5 seconds");
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
 
         Ok(())

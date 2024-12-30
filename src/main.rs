@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
     let mut ist_updater = updaters::ist::IstUpdater::new();
 
     // ist_updater.insert_lines(&pool).await?;
-    // ist_updater.get_credentials().await?;
+    ist_updater.get_credentials().await?;
     // ist_updater.insert_routes(&pool).await?;
     // ist_updater.insert_line_stops(&pool).await?;
     // ist_updater.insert_route_paths(&pool).await?;
