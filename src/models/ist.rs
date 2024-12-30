@@ -60,3 +60,8 @@ impl PartialEq for IstLineStopsResponse {
         self.stop_code != other.stop_code
     }
 }
+
+#[derive(Deserialize)]
+pub struct IstRoutePathResponse {
+    pub line: String,
+}

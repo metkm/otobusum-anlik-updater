@@ -418,4 +418,9 @@ impl Updater for IzmUpdater {
 
         Ok(())
     }
+
+    async fn insert_route_paths(&self, _db: &PgPool) -> Result<(), anyhow::Error> {
+        info!("route paths for izmir inserted when line stops are inserted");
+        Ok(())
+    }
 }

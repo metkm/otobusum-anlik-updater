@@ -1,13 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
 use reqwest::header::HeaderMap;
-use sqlx::{PgPool, QueryBuilder};
-use tracing::info;
+use sqlx::{PgPool, QueryBuilder, types::Json};
+use tracing::{info, warn};
 
 use crate::{
     models::{
-        database::DatabaseLine,
-        ist::{IstLineRoutesResponse, IstLineStopsResponse, IstTokensResponse},
+        database::{DatabaseLine, DatabaseRoute, LatLng},
+        ist::{
+            IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathResponse, IstTokensResponse,
+        },
         soap::{BusLineResponseSoap, BusLineSoap},
     },
     updater::Updater,
@@ -180,6 +182,9 @@ impl Updater for IstUpdater {
                     routes_insert_result.rows_affected()
                 );
             }
+
+            info!("sleeping for 5 seconds");
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
 
         Ok(())
@@ -291,6 +296,101 @@ impl Updater for IstUpdater {
                     insert_stops_result.rows_affected()
                 );
             }
+
+            info!("sleeping for 5 seconds");
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        }
+
+        Ok(())
+    }
+
+    async fn insert_route_paths(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+        let route_paths = sqlx::query_as!(
+            DatabaseRoute,
+            "SELECT
+                agency_id,
+                route_short_name,
+                route_long_name,
+                route_type,
+                route_desc,
+                route_code,
+                city
+            FROM
+                routes
+            WHERE
+                route_code LIKE '%_D0'
+        "
+        )
+        .fetch_all(db)
+        .await?;
+
+        for route in route_paths {
+            let line_response = self
+                .client
+                .get("https://iett.istanbul/tr/RouteStation/GetRoutePinV2")
+                .query(&[("q", route.route_code.as_ref().unwrap())])
+                .send()
+                .await?
+                .json::<Vec<IstRoutePathResponse>>()
+                .await?;
+
+            let Some(first) = line_response.get(0) else {
+                warn!("route path not found for {}", route.route_code.as_ref().unwrap());
+                continue;
+            };
+
+            let paths_parsed = first
+                .line
+                .split("|")
+                .flat_map(|part| {
+                    let res = part
+                        .strip_prefix("LINESTRING (")
+                        .and_then(|rest| rest.strip_suffix(")"))
+                        .and_then(|inner| Some(inner.split(",")))
+                        .and_then(|coords| {
+                            let result = coords
+                                .filter_map(|coord| {
+                                    let mut sp = coord.trim().split_whitespace();
+                                    let x = sp.next()?.parse::<f64>().ok()?;
+                                    let y = sp.next()?.parse::<f64>().ok()?;
+
+                                    Some(LatLng { lng: x, lat: y })
+                                })
+                                .collect::<Vec<LatLng>>();
+
+                            Some(result)
+                        });
+
+                    res
+                })
+                .flatten()
+                .collect::<Vec<LatLng>>();
+
+            info!(
+                "inserting route_paths for {:?}",
+                route.route_code.as_ref().unwrap()
+            );
+
+            let insert_route_paths_result = sqlx::query!(
+                r#"
+                    INSERT INTO
+                        route_paths (route_code, route_path, city)
+                    VALUES
+                        ($1, $2, $3)
+                    ON CONFLICT (route_code, city) DO UPDATE SET
+                        route_path=EXCLUDED.route_path
+                "#,
+                route.route_code.as_ref().unwrap(),
+                Json(paths_parsed) as _,
+                "istanbul"
+            )
+            .execute(db)
+            .await?;
+
+            info!(
+                "inserted {} rows",
+                insert_route_paths_result.rows_affected()
+            );
 
             info!("sleeping for 5 seconds");
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
