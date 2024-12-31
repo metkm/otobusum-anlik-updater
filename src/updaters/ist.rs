@@ -245,6 +245,11 @@ impl Updater for IstUpdater {
                     })
                     .collect();
 
+                if stops.len() < 1 {
+                    warn!("no stops found for {}. skipping", &line.code);
+                    continue;
+                }
+
                 let insert_line_stops_result = QueryBuilder::new(
                     "INSERT INTO line_stops (line_code, stop_code, stop_order, city, route_code)",
                 )

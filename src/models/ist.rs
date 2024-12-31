@@ -29,13 +29,13 @@ pub struct IstLineRoutesResponse {
     // pub route_direction: u32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct StopGeoLocation {
     pub x: f64,
     pub y: f64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct IstLineStopsResponse {
     #[serde(alias = "GUZERGAH_GUZERGAH_KODU")]
     pub route_code: String,
@@ -48,7 +48,7 @@ pub struct IstLineStopsResponse {
     #[serde(alias = "DURAK_GEOLOC")]
     pub stop_geo: StopGeoLocation,
     #[serde(alias = "ILCELER_ILCEADI")]
-    pub province: String,
+    pub province: Option<String>,
 }
 
 impl PartialEq for IstLineStopsResponse {
