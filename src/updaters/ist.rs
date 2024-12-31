@@ -507,8 +507,8 @@ impl Updater for IstUpdater {
                 );
             }
 
-            info!("sleeping for 5 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            info!("sleeping for 10 seconds");
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
         }
 
         Ok(())

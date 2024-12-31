@@ -9,8 +9,7 @@ use crate::{
     models::{
         database::{DatabaseLine, DatabaseRoute, DatabaseTimetable, LatLng},
         izm::{
-            Direction, EshotLineResponse, IzmLine, IzmLinesResponse, IzmLoginBody,
-            IzmLoginBodyResponse, IzmSearchResponse, IzmSearchResult,
+            Direction, EshotLineResponse, EshotLineStation, IzmLine, IzmLinesResponse, IzmLoginBody, IzmLoginBodyResponse, IzmSearchResponse, IzmSearchResult
         },
     },
     updater::Updater,
@@ -263,11 +262,25 @@ impl Updater for IzmUpdater {
                 );
 
                 info!("inserting stops for {}", route_code);
+
+                let mut stop_codes: HashSet<i32> = HashSet::new();
+                let stops: Vec<&EshotLineStation> = route.stations
+                    .iter()
+                    .filter_map(|x| {
+                        if stop_codes.contains(&x.id) {
+                            None
+                        } else {
+                            stop_codes.insert(x.id);
+                            Some(x)
+                        }
+                    })
+                    .collect();
+
                 let insert_stops_result = QueryBuilder::new(
                     "INSERT INTO stops (stop_code, stop_name, x_coord, y_coord, city)",
                 )
-                .push_values(&route.stations, |mut b, station| {
-                    b.push_bind(station.code.parse::<i32>().unwrap())
+                .push_values(&stops, |mut b, station| {
+                    b.push_bind(station.id)
                         .push_bind(&station.name)
                         .push_bind(station.lng)
                         .push_bind(station.lat)
