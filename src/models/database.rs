@@ -41,3 +41,11 @@ pub struct DatabaseTimetable {
     pub friday: Vec<NaiveTime>,
     pub saturday: Vec<NaiveTime>,
 }
+
+pub struct DatabaseLineStop {
+    pub line_code: String,
+    pub stop_code: i32,
+    pub city: String,
+    pub route_code: String,
+    pub stop_order: i32,
+}

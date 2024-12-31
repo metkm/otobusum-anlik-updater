@@ -7,7 +7,7 @@ use tracing::{info, warn};
 
 use crate::{
     models::{
-        database::{DatabaseLine, DatabaseRoute, DatabaseTimetable, LatLng},
+        database::{DatabaseLine, DatabaseLineStop, DatabaseRoute, DatabaseTimetable, LatLng},
         izm::{
             Direction, EshotLineResponse, EshotLineStation, IzmLine, IzmLinesResponse, IzmLoginBody, IzmLoginBodyResponse, IzmSearchResponse, IzmSearchResult
         },
@@ -302,14 +302,26 @@ impl Updater for IzmUpdater {
                     route_code
                 );
 
+                let stations_with_order = route.stations
+                    .iter()
+                    .enumerate()
+                    .map(|(index, station)| DatabaseLineStop {
+                        city: "izmir".to_string(),
+                        line_code: line.code.to_string(),
+                        stop_code: station.id,
+                        route_code: route_code.to_string(),
+                        stop_order: index as i32
+                    });
+
                 info!("inserting line_stops for {}", route_code);
                 let insert_line_stops_result = QueryBuilder::new(
-                    "INSERT INTO line_stops (line_code, stop_code, route_code, city)",
+                    "INSERT INTO line_stops (line_code, stop_code, route_code, stop_order, city)",
                 )
-                .push_values(route.stations, |mut b, station| {
+                .push_values(stations_with_order, |mut b, station| {
                     b.push_bind(&line.code)
-                        .push_bind(station.id)
+                        .push_bind(station.stop_code)
                         .push_bind(&route_code)
+                        .push_bind(station.stop_order)
                         .push_bind("izmir");
                 })
                 .push("ON CONFLICT DO NOTHING")
