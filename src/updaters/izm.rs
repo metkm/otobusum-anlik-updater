@@ -256,7 +256,7 @@ impl Updater for IzmUpdater {
 
             for route in line_data.data {
                 let route_code = format!(
-                    "{:?}_{:?}_D0",
+                    "{}_{:?}_D0",
                     &line.code,
                     Direction::try_from(route.direction).unwrap()
                 );
