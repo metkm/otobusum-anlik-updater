@@ -9,7 +9,8 @@ use crate::{
     models::{
         database::{DatabaseLine, DatabaseLineStop, DatabaseRoute, DatabaseTimetable, LatLng},
         izm::{
-            Direction, EshotLineResponse, EshotLineStation, IzmLine, IzmLinesResponse, IzmLoginBody, IzmLoginBodyResponse, IzmSearchResponse, IzmSearchResult
+            Direction, EshotLineResponse, EshotLineStation, IzmLine, IzmLinesResponse,
+            IzmLoginBody, IzmLoginBodyResponse, IzmSearchResponse, IzmSearchResult,
         },
     },
     updater::Updater,
@@ -200,9 +201,12 @@ impl Updater for IzmUpdater {
     async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error> {
         info!("getting lines");
 
-        let lines = sqlx::query_as!(DatabaseLine, "SELECT * FROM lines WHERE city = 'izmir'")
-            .fetch_all(db)
-            .await?;
+        let lines = sqlx::query_as!(
+            DatabaseLine,
+            "SELECT * FROM lines WHERE city = 'izmir' ORDER BY code"
+        )
+        .fetch_all(db)
+        .await?;
 
         let mut search_cache: HashSet<IzmSearchResult> = HashSet::new();
 
@@ -264,7 +268,8 @@ impl Updater for IzmUpdater {
                 info!("inserting stops for {}", route_code);
 
                 let mut stop_codes: HashSet<i32> = HashSet::new();
-                let stops: Vec<&EshotLineStation> = route.stations
+                let stops: Vec<&EshotLineStation> = route
+                    .stations
                     .iter()
                     .filter_map(|x| {
                         if stop_codes.contains(&x.id) {
@@ -302,16 +307,28 @@ impl Updater for IzmUpdater {
                     route_code
                 );
 
-                let stations_with_order = route.stations
-                    .iter()
-                    .enumerate()
-                    .map(|(index, station)| DatabaseLineStop {
-                        city: "izmir".to_string(),
-                        line_code: line.code.to_string(),
-                        stop_code: station.id,
-                        route_code: route_code.to_string(),
-                        stop_order: index as i32 + 1
-                    });
+                let mut found_line_stops: HashSet<String> = HashSet::new();
+                let stations_with_order =
+                    route
+                        .stations
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, station)| {
+                            let target = format!("{}-{}", &route_code, &station.code);
+
+                            if found_line_stops.contains(&target) {
+                                None
+                            } else {
+                                found_line_stops.insert(target);
+                                Some(DatabaseLineStop {
+                                    city: "izmir".to_string(),
+                                    line_code: line.code.to_string(),
+                                    stop_code: station.id,
+                                    route_code: route_code.to_string(),
+                                    stop_order: index as i32 + 1,
+                                })
+                            }
+                        });
 
                 info!("inserting line_stops for {}", route_code);
                 let insert_line_stops_result = QueryBuilder::new(
@@ -324,10 +341,11 @@ impl Updater for IzmUpdater {
                         .push_bind(station.stop_order)
                         .push_bind("izmir");
                 })
-                .push("ON CONFLICT (route_code, stop_code, city)
+                .push(
+                    "ON CONFLICT (route_code, stop_code, city)
                     DO UPDATE SET
                         stop_order=EXCLUDED.stop_order
-                        "
+                        ",
                 )
                 .build()
                 .execute(db)

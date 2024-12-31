@@ -459,10 +459,9 @@ impl Updater for IstUpdater {
                 };
 
                 for timetable in timetables {
-                    let time =
-                        NaiveDateTime::parse_from_str(&timetable.time, "%Y-%m-%d %H:%M:%S")
-                            .unwrap()
-                            .time();
+                    let time = NaiveDateTime::parse_from_str(&timetable.time, "%Y-%m-%d %H:%M:%S")
+                        .unwrap()
+                        .time();
 
                     if timetable.day_type == DayType::I {
                         timetable_to_insert.monday.push(time);
