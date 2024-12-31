@@ -324,7 +324,11 @@ impl Updater for IzmUpdater {
                         .push_bind(station.stop_order)
                         .push_bind("izmir");
                 })
-                .push("ON CONFLICT DO NOTHING")
+                .push("ON CONFLICT (route_code, stop_code, city)
+                    DO UPDATE SET
+                        stop_order=EXCLUDED.stop_order
+                        "
+                )
                 .build()
                 .execute(db)
                 .await?;
