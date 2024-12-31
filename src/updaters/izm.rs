@@ -310,7 +310,7 @@ impl Updater for IzmUpdater {
                         line_code: line.code.to_string(),
                         stop_code: station.id,
                         route_code: route_code.to_string(),
-                        stop_order: index as i32
+                        stop_order: index as i32 + 1
                     });
 
                 info!("inserting line_stops for {}", route_code);
