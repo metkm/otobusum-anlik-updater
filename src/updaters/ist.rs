@@ -213,7 +213,7 @@ impl Updater for IstUpdater {
 
         for line in lines {
             for direction in &[119, 120] {
-                info!("getting route stops");
+                info!("getting route stops for {}", &line.code);
                 let stops_body = &serde_json::json!({
                     "alias": "mainGetRoute",
                     "data": {
@@ -232,10 +232,23 @@ impl Updater for IstUpdater {
                     .json::<Vec<IstLineStopsResponse>>()
                     .await?;
 
+                let mut stop_codes: HashSet<i32> = HashSet::new();
+                let stops: Vec<&IstLineStopsResponse> = route_stops
+                    .iter()
+                    .filter_map(|x| {
+                        if stop_codes.contains(&x.stop_code) {
+                            None
+                        } else {
+                            stop_codes.insert(x.stop_code);
+                            Some(x)
+                        }
+                    })
+                    .collect();
+
                 let insert_line_stops_result = QueryBuilder::new(
                     "INSERT INTO line_stops (line_code, stop_code, stop_order, city, route_code)",
                 )
-                .push_values(&route_stops, |mut b, record| {
+                .push_values(&stops, |mut b, record| {
                     b.push_bind(&line.code)
                         .push_bind(&record.stop_code)
                         .push_bind(&record.stop_order)
@@ -253,25 +266,13 @@ impl Updater for IstUpdater {
                 .await?;
 
                 info!(
-                    "inserted {} line stops",
-                    insert_line_stops_result.rows_affected()
+                    "inserted {} line stops for {}",
+                    insert_line_stops_result.rows_affected(),
+                    &line.code
                 );
 
-                let mut stop_codes: HashSet<i32> = HashSet::new();
-                let stops: Vec<&IstLineStopsResponse> = route_stops
-                    .iter()
-                    .filter_map(|x| {
-                        if stop_codes.contains(&x.stop_code) {
-                            None
-                        } else {
-                            stop_codes.insert(x.stop_code);
-                            Some(x)
-                        }
-                    })
-                    .collect();
-
                 let insert_stops_result = QueryBuilder::new(
-                    "INSERT INTO stops (stop_code, stop_name, x_coord, y_coord, province, stop_order, city)",
+                    "INSERT INTO stops (stop_code, stop_name, x_coord, y_coord, province, city)",
                 )
                 .push_values(&stops, |mut b, record| {
                     b.push_bind(record.stop_code)
@@ -279,7 +280,6 @@ impl Updater for IstUpdater {
                         .push_bind(record.stop_geo.x)
                         .push_bind(record.stop_geo.y)
                         .push_bind(&record.province)
-                        .push_bind(&record.stop_order)
                         .push_bind("istanbul");
                 })
                 .push(
@@ -288,7 +288,6 @@ impl Updater for IstUpdater {
                         stop_name=EXCLUDED.stop_name,
                         x_coord=EXCLUDED.x_coord,
                         y_coord=EXCLUDED.y_coord
-                        stop_order=EXCLUDED.stop_order
                 ",
                 )
                 .build()
@@ -296,13 +295,14 @@ impl Updater for IstUpdater {
                 .await?;
 
                 info!(
-                    "inserted/updated {} stops",
-                    insert_stops_result.rows_affected()
+                    "inserted/updated {} stops for {}",
+                    insert_stops_result.rows_affected(),
+                    &line.code
                 );
             }
 
-            info!("sleeping for 5 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            info!("sleeping for 10 seconds");
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
         }
 
         Ok(())
