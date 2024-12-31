@@ -271,7 +271,7 @@ impl Updater for IstUpdater {
                     .collect();
 
                 let insert_stops_result = QueryBuilder::new(
-                    "INSERT INTO stops (stop_code, stop_name, x_coord, y_coord, province, city)",
+                    "INSERT INTO stops (stop_code, stop_name, x_coord, y_coord, province, stop_order, city)",
                 )
                 .push_values(&stops, |mut b, record| {
                     b.push_bind(record.stop_code)
@@ -279,6 +279,7 @@ impl Updater for IstUpdater {
                         .push_bind(record.stop_geo.x)
                         .push_bind(record.stop_geo.y)
                         .push_bind(&record.province)
+                        .push_bind(&record.stop_order)
                         .push_bind("istanbul");
                 })
                 .push(
@@ -287,6 +288,7 @@ impl Updater for IstUpdater {
                         stop_name=EXCLUDED.stop_name,
                         x_coord=EXCLUDED.x_coord,
                         y_coord=EXCLUDED.y_coord
+                        stop_order=EXCLUDED.stop_order
                 ",
                 )
                 .build()
