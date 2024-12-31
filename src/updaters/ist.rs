@@ -390,8 +390,9 @@ impl Updater for IstUpdater {
             .await?;
 
             info!(
-                "inserted {} rows",
-                insert_route_paths_result.rows_affected()
+                "inserted {} rows for {:?}",
+                insert_route_paths_result.rows_affected(),
+                &route.route_code
             );
 
             info!("sleeping for 5 seconds");
@@ -500,8 +501,9 @@ impl Updater for IstUpdater {
                     .await?;
 
                 info!(
-                    "inserted {} timetable row",
-                    inserted_timetable.rows_affected()
+                    "inserted {} timetable rows for {}",
+                    inserted_timetable.rows_affected(),
+                    &line.code
                 );
             }
 
