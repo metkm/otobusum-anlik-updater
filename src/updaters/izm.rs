@@ -399,7 +399,11 @@ impl Updater for IzmUpdater {
 
                 info!("inserting timetable");
                 let sunday = 0b1000000;
-                let weekday = 0b0011111;
+                let monday = 0b0000001;
+                let tuesday = 0b0000010;
+                let wednesday = 0b0000100;
+                let thursday = 0b0001000;
+                let friday = 0b0010000;
                 let saturday = 0b0100000;
 
                 let mut timetable = DatabaseTimetable {
@@ -413,11 +417,19 @@ impl Updater for IzmUpdater {
                         continue;
                     };
 
-                    if (table.day & weekday) != 0 {
+                    if (table.day & monday) != 0 {
                         timetable.monday.push(to_insert);
+                    }
+                    if (table.day & tuesday) != 0 {
                         timetable.tuesday.push(to_insert);
+                    }
+                    if (table.day & wednesday) != 0 {
                         timetable.wednesday.push(to_insert);
+                    }
+                    if (table.day & thursday) != 0 {
                         timetable.thursday.push(to_insert);
+                    }
+                    if (table.day & friday) != 0 {
                         timetable.friday.push(to_insert);
                     }
                     if (table.day & sunday) != 0 {
