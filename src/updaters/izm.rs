@@ -152,7 +152,7 @@ impl Updater for IzmUpdater {
                     DatabaseRoute {
                         agency_id: Some(1),
                         route_short_name: Some(line.line_code.to_string()),
-                        route_long_name: Some(format!("{} - {}", line.line_start, line.line_end)),
+                        route_long_name: Some(format!("{} - {}", line.line_end, line.line_start)),
                         route_type: Some(3),
                         route_code: Some(format!("{}_D_D0", line.line_code)),
                         route_desc: None,
