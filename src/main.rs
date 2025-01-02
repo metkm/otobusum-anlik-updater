@@ -14,19 +14,19 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
     let pool = PgPool::connect(&database_url).await?;
 
-    let mut izm_updater = updaters::izm::IzmUpdater::new();
+    // let mut izm_updater = updaters::izm::IzmUpdater::new();
 
-    izm_updater.insert_lines(&pool).await?;
-    izm_updater.get_credentials().await?;
-    izm_updater.insert_line_stops(&pool).await?;
+    // izm_updater.insert_lines(&pool).await?;
+    // izm_updater.get_credentials().await?;
+    // izm_updater.insert_line_stops(&pool).await?;
 
-    // let mut ist_updater = updaters::ist::IstUpdater::new();
+    let ist_updater = updaters::ist::IstUpdater::new();
 
-    // // ist_updater.insert_lines(&pool).await?;
+    // ist_updater.insert_lines(&pool).await?;
     // ist_updater.get_credentials().await?;
-    // // ist_updater.insert_routes(&pool).await?;
+    // ist_updater.insert_routes(&pool).await?;
     // ist_updater.insert_line_stops(&pool).await?;
-    // ist_updater.insert_route_paths(&pool).await?;
+    ist_updater.insert_route_paths(&pool).await?;
     // ist_updater.insert_timetable(&pool).await?;
 
     Ok(())
