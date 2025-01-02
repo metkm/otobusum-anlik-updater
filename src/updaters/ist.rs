@@ -371,7 +371,7 @@ impl Updater for IstUpdater {
 
         let filtered_routes = geojson.features
             .into_iter()
-            .filter(|feat| !database_route_codes.contains(&feat.properties.route_code))
+            .filter(|feat| database_route_codes.contains(&feat.properties.route_code))
             .collect::<Vec<IstRoutePathGeoJsonFeature>>();
 
         let inserted_route_paths_result = QueryBuilder::new(
