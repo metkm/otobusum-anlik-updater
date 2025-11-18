@@ -136,7 +136,7 @@ impl Updater for IstUpdater {
         .fetch_all(db)
         .await?;
 
-        for line in lines {
+        for (index, line) in lines.iter().enumerate() {
             for direction in &[119, 120] {
                 let routes_body = &serde_json::json!({
                     "alias": "mainGetLine_basic",
@@ -147,8 +147,10 @@ impl Updater for IstUpdater {
                 });
 
                 info!(
-                    "getting line routes for {}, direction {}",
-                    &line.code, direction
+                    "{}: getting line routes for {}, direction {}",
+                    index,
+                    &line.code,
+                    direction
                 );
                 let line_routes = self
                     .client
@@ -159,6 +161,11 @@ impl Updater for IstUpdater {
                     .await?
                     .json::<Vec<IstLineRoutesResponse>>()
                     .await?;
+
+                if line_routes.len() == 0 {
+                    info!("skipping {}, routes vec is empty", &line.code);
+                    continue;
+                }
 
                 let routes_insert_result = QueryBuilder::new(
                     "INSERT INTO routes (agency_id, route_short_name, route_long_name, route_type, route_code, city)"
@@ -184,13 +191,14 @@ impl Updater for IstUpdater {
                 .await?;
 
                 info!(
-                    "inserted/updated {} route rows",
+                    "{}: inserted/updated {} route rows",
+                    index,
                     routes_insert_result.rows_affected()
                 );
             }
 
-            info!("sleeping for 5 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            info!("sleeping for 10 seconds");
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
         }
 
         Ok(())
@@ -215,9 +223,10 @@ impl Updater for IstUpdater {
 
         info!("found {} lines", lines.len());
 
-        for line in lines {
+        for (index, line) in lines.iter().enumerate() {
             for direction in &[119, 120] {
-                info!("getting route stops for {}", &line.code);
+                info!("{}: getting route stops for {}", index, &line.code);
+
                 let stops_body = &serde_json::json!({
                     "alias": "mainGetRoute",
                     "data": {
@@ -250,7 +259,7 @@ impl Updater for IstUpdater {
                     .collect();
 
                 if stops.len() < 1 {
-                    warn!("no stops found for {}. skipping", &line.code);
+                    warn!("{}:no stops found for {}. skipping", index, &line.code);
                     continue;
                 }
 
@@ -275,7 +284,8 @@ impl Updater for IstUpdater {
                 .await?;
 
                 info!(
-                    "inserted {} line stops for {}",
+                    "{}: inserted {} line stops for {}",
+                    index,
                     insert_line_stops_result.rows_affected(),
                     &line.code
                 );
@@ -423,7 +433,7 @@ impl Updater for IstUpdater {
 
         info!("got {} lines for timetable function", lines.len());
 
-        for line in lines {
+        for (index, line) in lines.iter().enumerate().skip(608) {
             let timetable_body = &serde_json::json!({
                 "alias": "akyolbilGetTimeTable",
                 "data": {
@@ -431,7 +441,7 @@ impl Updater for IstUpdater {
                 }
             });
 
-            info!("getting timetable for {}", &line.code);
+            info!("{}: getting timetable for {}", index, &line.code);
             let timetable_response = self
                 .client
                 .post("https://ntcapi.iett.istanbul/service")
@@ -502,7 +512,8 @@ impl Updater for IstUpdater {
                     .await?;
 
                 info!(
-                    "inserted {} timetable rows for {}",
+                    "{}: inserted {} timetable rows for {}",
+                    index,
                     inserted_timetable.rows_affected(),
                     &line.code
                 );

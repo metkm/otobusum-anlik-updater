@@ -9,7 +9,7 @@ pub struct IstTokensResponse {
     pub expire_date: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct IstLineRoutesResponse {
     // #[serde(alias = "HAT_HAT_ADI")]
     // pub line_name: String,
