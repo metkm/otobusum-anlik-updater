@@ -198,7 +198,7 @@ impl Updater for IstUpdater {
             }
 
             info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
         }
 
         Ok(())
@@ -321,7 +321,7 @@ impl Updater for IstUpdater {
             }
 
             info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
         }
 
         Ok(())
@@ -520,7 +520,7 @@ impl Updater for IstUpdater {
             }
 
             info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
         }
 
         Ok(())

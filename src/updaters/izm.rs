@@ -243,7 +243,7 @@ impl Updater for IzmUpdater {
                     line.code
                 );
 
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
                 continue;
             };
 
@@ -472,7 +472,7 @@ impl Updater for IzmUpdater {
             }
 
             info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
         }
 
         Ok(())
