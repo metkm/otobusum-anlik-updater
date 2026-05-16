@@ -11,8 +11,8 @@ pub struct IstTokensResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct IstLineRoutesResponse {
-    // #[serde(alias = "HAT_HAT_ADI")]
-    // pub line_name: String,
+    #[serde(alias = "HAT_HAT_ADI")]
+    pub line_name: String,
     #[serde(alias = "HAT_HAT_KODU")]
     pub line_code: String,
     // #[serde(alias = "HAT_ID")]
@@ -20,7 +20,7 @@ pub struct IstLineRoutesResponse {
     // #[serde(alias = "GUZERGAH_DEPAR_NO")]
     // pub route_departure_no: u32,
     #[serde(alias = "GUZERGAH_GUZERGAH_ADI")]
-    pub route_name: String,
+    pub route_name: Option<String>,
     #[serde(alias = "GUZERGAH_GUZERGAH_KODU")]
     pub route_code: String,
     // #[serde(alias = "GUZERGAH_ID")]

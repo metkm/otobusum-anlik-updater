@@ -172,7 +172,7 @@ impl Updater for IstUpdater {
                 .push_values(line_routes, |mut b, record| {
                     b.push_bind(1)
                     .push_bind(record.line_code)
-                    .push_bind(record.route_name.trim().to_string())
+                    .push_bind(record.route_name.unwrap_or(record.line_name.to_string()).trim().to_string())
                     .push_bind(3)
                     .push_bind(record.route_code)
                     .push_bind("istanbul");
