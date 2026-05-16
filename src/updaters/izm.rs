@@ -6,14 +6,13 @@ use sqlx::{PgPool, QueryBuilder, types::Json};
 use tracing::{info, warn};
 
 use crate::{
-    models::{
+    constants::SLEEP_DURATION, models::{
         database::{DatabaseLine, DatabaseLineStop, DatabaseRoute, DatabaseTimetable, LatLng},
         izm::{
             Direction, EshotLineResponse, EshotLineStation, IzmLine, IzmLinesResponse,
             IzmLoginBody, IzmLoginBodyResponse, IzmSearchResponse, IzmSearchResult,
         },
-    },
-    updater::Updater,
+    }, updater::Updater
 };
 
 #[derive(Debug)]
@@ -243,7 +242,7 @@ impl Updater for IzmUpdater {
                     line.code
                 );
 
-                tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+                tokio::time::sleep(SLEEP_DURATION).await;
                 continue;
             };
 
@@ -471,8 +470,8 @@ impl Updater for IzmUpdater {
                 );
             }
 
-            info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+            info!("sleeping for {} seconds", SLEEP_DURATION.as_secs());
+            tokio::time::sleep(SLEEP_DURATION).await;
         }
 
         Ok(())

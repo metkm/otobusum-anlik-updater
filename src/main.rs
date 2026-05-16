@@ -7,6 +7,7 @@ use clap::Parser;
 mod models;
 mod updater;
 mod updaters;
+mod constants;
 
 #[derive(Parser, Debug)]
 #[command(about)]

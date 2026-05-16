@@ -11,14 +11,13 @@ use sqlx::{types::Json, PgPool, QueryBuilder};
 use tracing::{info, warn};
 
 use crate::{
-    models::{
+    constants::SLEEP_DURATION, models::{
         database::{DatabaseLine, DatabaseRoute, DatabaseTimetable, LatLng},
         ist::{
             DayType, IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathGeoJson, IstRoutePathGeoJsonFeature, IstTimetableResponse, IstTokensResponse
         },
         soap::{BusLineResponseSoap, BusLineSoap},
-    },
-    updater::Updater,
+    }, updater::Updater
 };
 
 #[derive(Debug)]
@@ -197,8 +196,8 @@ impl Updater for IstUpdater {
                 );
             }
 
-            info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+            info!("sleeping for {} seconds", SLEEP_DURATION.as_secs());
+            tokio::time::sleep(SLEEP_DURATION).await;
         }
 
         Ok(())
@@ -320,8 +319,8 @@ impl Updater for IstUpdater {
                 );
             }
 
-            info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+            info!("sleeping for {} seconds", SLEEP_DURATION.as_secs());
+            tokio::time::sleep(SLEEP_DURATION).await;
         }
 
         Ok(())
@@ -519,8 +518,8 @@ impl Updater for IstUpdater {
                 );
             }
 
-            info!("sleeping for 10 seconds");
-            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+            info!("sleeping for {} seconds", SLEEP_DURATION.as_secs());
+            tokio::time::sleep(SLEEP_DURATION).await;
         }
 
         Ok(())
