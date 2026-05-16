@@ -432,7 +432,7 @@ impl Updater for IstUpdater {
 
         info!("got {} lines for timetable function", lines.len());
 
-        for (index, line) in lines.iter().enumerate().skip(608) {
+        for (index, line) in lines.iter().enumerate() {
             let timetable_body = &serde_json::json!({
                 "alias": "akyolbilGetTimeTable",
                 "data": {
