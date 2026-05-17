@@ -85,12 +85,12 @@ pub struct IstTimetableResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct IstRoutePathGeoJsonGeometry {
-    pub coordinates: Vec<Vec<[f64; 2]>>,
+    pub coordinates: Vec<[f64; 2]>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct IstRoutePathGeoJsonProperties {
-    #[serde(alias = "GUZERGAH_K")]
+    #[serde(alias = "GUZERGAH_KODU")]
     pub route_code: String,
 }
 

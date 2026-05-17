@@ -389,7 +389,6 @@ impl Updater for IstUpdater {
             .push_values(filtered_routes, |mut b, record| {
                 let coords = record.geometry.coordinates
                     .into_iter()
-                    .flatten()
                     .map(|coord| LatLng {
                         lng: *coord.get(0).unwrap(),
                         lat: *coord.get(1).unwrap(),
