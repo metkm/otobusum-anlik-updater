@@ -352,7 +352,7 @@ impl Updater for IstUpdater {
                 info!("downloading geojson file because It's not found");
 
                 let response = self.client
-                    .get("https://data.ibb.gov.tr/dataset/b48d2095-851c-413c-8d36-87d2310a22b5/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/download/iett-hat-guzergahlar.geojson")
+                    .get("https://data.ibb.gov.tr/dataset/iett-hat-guzergahlari/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/geojson_download")
                     .send()
                     .await?;
 
