@@ -384,7 +384,7 @@ impl Updater for IstUpdater {
             .collect::<Vec<IstRoutePathGeoJsonFeature>>();
 
         let inserted_route_paths_result = QueryBuilder::new(
-            "INSERT INTO route_paths (route_code, route_path, city)"
+            "INSERT INTO route_paths (route_code, path, city)"
         )
             .push_values(filtered_routes, |mut b, record| {
                 let coords = record.geometry.coordinates
@@ -401,7 +401,7 @@ impl Updater for IstUpdater {
 
             })
             .push("ON CONFLICT (route_code, city) DO UPDATE SET
-                         route_path=EXCLUDED.route_path
+                         path=EXCLUDED.path
             ")
             .build()
             .execute(db)
