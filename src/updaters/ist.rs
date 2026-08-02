@@ -167,7 +167,7 @@ impl Updater for IstUpdater {
                 }
 
                 let routes_insert_result = QueryBuilder::new(
-                    "INSERT INTO routes (agency_id, route_short_name, route_long_name, route_type, route_code, city)"
+                    "INSERT INTO routes (agency_id, code, title, type, route_code, city)"
                 )
                 .push_values(line_routes, |mut b, record| {
                     b.push_bind(1)
@@ -180,9 +180,9 @@ impl Updater for IstUpdater {
                 .push("
                     ON CONFLICT (route_code, city) DO UPDATE SET
                         agency_id=EXCLUDED.agency_id,
-                        route_short_name=EXCLUDED.route_short_name,
-                        route_long_name=EXCLUDED.route_long_name,
-                        route_type=EXCLUDED.route_type,
+                        code=EXCLUDED.code,
+                        title=EXCLUDED.title,
+                        type=EXCLUDED.type,
                         route_code=EXCLUDED.route_code
                 ")
                 .build()

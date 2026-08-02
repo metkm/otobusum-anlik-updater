@@ -161,7 +161,7 @@ impl Updater for IzmUpdater {
             })
             .collect::<Vec<DatabaseRoute>>();
 
-        let routes_insert_result = QueryBuilder::new("INSERT INTO routes (agency_id, route_short_name, route_long_name, route_type, route_desc, route_code, city)")
+        let routes_insert_result = QueryBuilder::new("INSERT INTO routes (agency_id, code, title, type, description, route_code, city)")
             .push_values(route_codes, |mut b, record| {
                 b.push_bind(record.agency_id);
                 b.push_bind(record.code);
@@ -174,10 +174,10 @@ impl Updater for IzmUpdater {
             .push("
                 ON CONFLICT (route_code, city) DO UPDATE SET
                     agency_id=EXCLUDED.agency_id,
-                    route_short_name=EXCLUDED.route_short_name,
-                    route_long_name=EXCLUDED.route_long_name,
-                    route_type=EXCLUDED.route_type,
-                    route_desc=EXCLUDED.route_desc,
+                    code=EXCLUDED.code,
+                    title=EXCLUDED.title,
+                    type=EXCLUDED.type,
+                    description=EXCLUDED.description,
                     route_code=EXCLUDED.route_code
             ")
             .build()
