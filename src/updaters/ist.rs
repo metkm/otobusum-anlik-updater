@@ -331,10 +331,10 @@ impl Updater for IstUpdater {
             DatabaseRoute,
             "SELECT
                 agency_id,
-                route_short_name,
-                route_long_name,
-                route_type,
-                route_desc,
+                code,
+                title,
+                type,
+                description,
                 route_code,
                 city
             FROM

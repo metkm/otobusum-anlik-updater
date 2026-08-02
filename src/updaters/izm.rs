@@ -141,20 +141,20 @@ impl Updater for IzmUpdater {
                 [
                     DatabaseRoute {
                         agency_id: Some(1),
-                        route_short_name: Some(line.line_code.to_string()),
-                        route_long_name: Some(format!("{} - {}", line.line_start, line.line_end)),
-                        route_type: Some(3),
+                        code: Some(line.line_code.to_string()),
+                        title: Some(format!("{} - {}", line.line_start, line.line_end)),
+                        r#type: Some(3),
                         route_code: Some(format!("{}_G_D0", line.line_code)),
-                        route_desc: None,
+                        description: None,
                         city: "izmir".to_string(),
                     },
                     DatabaseRoute {
                         agency_id: Some(1),
-                        route_short_name: Some(line.line_code.to_string()),
-                        route_long_name: Some(format!("{} - {}", line.line_end, line.line_start)),
-                        route_type: Some(3),
+                        code: Some(line.line_code.to_string()),
+                        title: Some(format!("{} - {}", line.line_end, line.line_start)),
+                        r#type: Some(3),
                         route_code: Some(format!("{}_D_D0", line.line_code)),
-                        route_desc: None,
+                        description: None,
                         city: "izmir".to_string(),
                     },
                 ]
@@ -164,10 +164,10 @@ impl Updater for IzmUpdater {
         let routes_insert_result = QueryBuilder::new("INSERT INTO routes (agency_id, route_short_name, route_long_name, route_type, route_desc, route_code, city)")
             .push_values(route_codes, |mut b, record| {
                 b.push_bind(record.agency_id);
-                b.push_bind(record.route_short_name);
-                b.push_bind(record.route_long_name);
-                b.push_bind(record.route_type);
-                b.push_bind(record.route_desc);
+                b.push_bind(record.code);
+                b.push_bind(record.title);
+                b.push_bind(record.r#type);
+                b.push_bind(record.description);
                 b.push_bind(record.route_code);
                 b.push_bind("izmir");
             })
@@ -377,11 +377,11 @@ impl Updater for IzmUpdater {
                 let insert_route_paths = sqlx::query!(
                     r#"
                         INSERT INTO
-                            route_paths (route_code, route_path, city)
+                            route_paths (route_code, path, city)
                         VALUES
                             ($1, $2, $3)
                         ON CONFLICT (route_code, city) DO UPDATE SET
-                            route_path=EXCLUDED.route_path
+                            path=EXCLUDED.path
                     "#,
                     &route_code,
                     Json(latlngs) as _,
