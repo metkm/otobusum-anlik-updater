@@ -35,7 +35,7 @@ struct Args {
     update_timetable: bool,
 
     #[arg(long, default_value_t = 0)]
-    offset: i32,
+    offset: usize,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -53,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
         ist_updater.get_credentials().await?;
 
         if args.update_lines {
-            ist_updater.insert_lines(&pool, args.offset).await?;
+            ist_updater.insert_lines(&pool).await?;
         }
 
         if args.update_routes {
@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         if args.update_route_paths {
-            ist_updater.insert_route_paths(&pool, args.offset).await?;
+            ist_updater.insert_route_paths(&pool).await?;
         }
 
         if args.update_timetable {
@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
         izm_updater.get_credentials().await?;
         
         if args.update_lines {
-            izm_updater.insert_lines(&pool, args.offset).await?;
+            izm_updater.insert_lines(&pool).await?;
         }
 
         if args.update_line_stops {
