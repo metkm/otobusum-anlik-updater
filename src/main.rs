@@ -32,7 +32,10 @@ struct Args {
 
     /// this might take a while for istanbul
     #[arg(long)]
-    update_timetable: bool
+    update_timetable: bool,
+
+    #[arg(long, default_value_t = 0)]
+    offset: i32,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -50,23 +53,23 @@ async fn main() -> anyhow::Result<()> {
         ist_updater.get_credentials().await?;
 
         if args.update_lines {
-            ist_updater.insert_lines(&pool).await?;
+            ist_updater.insert_lines(&pool, args.offset).await?;
         }
 
         if args.update_routes {
-            ist_updater.insert_routes(&pool).await?;
+            ist_updater.insert_routes(&pool, args.offset).await?;
         }
 
         if args.update_line_stops {
-            ist_updater.insert_line_stops(&pool).await?;
+            ist_updater.insert_line_stops(&pool, args.offset).await?;
         }
 
         if args.update_route_paths {
-            ist_updater.insert_route_paths(&pool).await?;
+            ist_updater.insert_route_paths(&pool, args.offset).await?;
         }
 
         if args.update_timetable {
-            ist_updater.insert_timetable(&pool).await?;
+            ist_updater.insert_timetable(&pool, args.offset).await?;
         }
     }
 
@@ -75,11 +78,11 @@ async fn main() -> anyhow::Result<()> {
         izm_updater.get_credentials().await?;
         
         if args.update_lines {
-            izm_updater.insert_lines(&pool).await?;
+            izm_updater.insert_lines(&pool, args.offset).await?;
         }
 
         if args.update_line_stops {
-            izm_updater.insert_line_stops(&pool).await?;
+            izm_updater.insert_line_stops(&pool, args.offset).await?;
         }
     }
 

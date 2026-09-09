@@ -192,12 +192,12 @@ impl Updater for IzmUpdater {
         Ok(())
     }
 
-    async fn insert_routes(&self, _db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_routes(&self, _db: &PgPool, _offset: usize) -> Result<(), anyhow::Error> {
         info!("routes are inserted for izmir when lines are inserted");
         Ok(())
     }
 
-    async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_line_stops(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
         info!("getting lines");
 
         let lines = sqlx::query_as!(
@@ -209,7 +209,7 @@ impl Updater for IzmUpdater {
 
         let mut search_cache: HashSet<IzmSearchResult> = HashSet::new();
 
-        for line in lines {
+        for (index, line) in lines.iter().skip(offset).enumerate() {
             let found_in_cache = search_cache.iter().find(|res| res.code == line.code);
 
             let search_result = match found_in_cache {
@@ -246,7 +246,7 @@ impl Updater for IzmUpdater {
                 continue;
             };
 
-            info!("getting line id: {}, code: {}", &result.id, result.code);
+            info!("{} getting line id: {}, code: {}", index, &result.id, result.code);
             let line_data = self
                 .client
                 .post("https://appapi.eshot.gov.tr/api/Assistant/getLine")
@@ -482,7 +482,7 @@ impl Updater for IzmUpdater {
         Ok(())
     }
 
-    async fn insert_timetable(&self, _db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_timetable(&self, _db: &PgPool, _offset: usize) -> Result<(), anyhow::Error> {
         info!("timetable for izmir inserted when line stops are inserted");
         Ok(())
     }

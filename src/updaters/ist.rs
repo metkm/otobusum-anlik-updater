@@ -118,7 +118,7 @@ impl Updater for IstUpdater {
         Ok(())
     }
 
-    async fn insert_routes(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_routes(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
         let lines = sqlx::query_as!(
             DatabaseLine,
             r#"
@@ -135,7 +135,7 @@ impl Updater for IstUpdater {
         .fetch_all(db)
         .await?;
 
-        for (index, line) in lines.iter().enumerate() {
+        for (index, line) in lines.iter().skip(offset).enumerate() {
             for direction in &[119, 120] {
                 let routes_body = &serde_json::json!({
                     "alias": "mainGetLine_basic",
@@ -203,7 +203,7 @@ impl Updater for IstUpdater {
         Ok(())
     }
 
-    async fn insert_line_stops(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_line_stops(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
         let lines = sqlx::query_as!(
             DatabaseLine,
             r#"
@@ -222,7 +222,7 @@ impl Updater for IstUpdater {
 
         info!("found {} lines", lines.len());
 
-        for (index, line) in lines.iter().enumerate() {
+        for (index, line) in lines.iter().skip(offset).enumerate() {
             for direction in &[119, 120] {
                 info!("{}: getting route stops for {}", index, &line.code);
 
@@ -412,7 +412,7 @@ impl Updater for IstUpdater {
         Ok(())
     }
 
-    async fn insert_timetable(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_timetable(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
         let lines = sqlx::query_as!(
             DatabaseLine,
             r#"
@@ -431,7 +431,7 @@ impl Updater for IstUpdater {
 
         info!("got {} lines for timetable function", lines.len());
 
-        for (index, line) in lines.iter().enumerate() {
+        for (index, line) in lines.iter().skip(offset).enumerate() {
             let timetable_body = &serde_json::json!({
                 "alias": "akyolbilGetTimeTable",
                 "data": {
