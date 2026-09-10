@@ -7,22 +7,27 @@ use std::{
 
 use chrono::NaiveDateTime;
 use reqwest::header::HeaderMap;
-use sqlx::{types::Json, PgPool, QueryBuilder};
+use sqlx::{PgPool, QueryBuilder, types::Json};
 use tracing::{info, warn};
 
 use crate::{
-    constants::SLEEP_DURATION, models::{
+    constants::SLEEP_DURATION,
+    models::{
         database::{DatabaseLine, DatabaseRoute, DatabaseTimetable, LatLng},
         ist::{
-            DayType, IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathGeoJson, IstRoutePathGeoJsonFeature, IstTimetableResponse, IstTokensResponse
+            DayType, IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathGeoJson,
+            IstRoutePathGeoJsonFeature, IstTimetableResponse, IstTokensResponse,
         },
         soap::{BusLineResponseSoap, BusLineSoap},
-    }, updater::Updater
+        token::Token,
+        updater::Updater,
+    },
+    request_client::RequestClient,
 };
 
 #[derive(Debug)]
 pub struct IstUpdater {
-    pub client: reqwest::Client,
+    // pub client: reqwest::Client,
     pub headers: HeaderMap,
 }
 
@@ -36,22 +41,25 @@ impl IstUpdater {
         );
 
         Self {
-            client: reqwest::Client::new(),
+            // client: reqwest::Client::new(),
             headers,
         }
     }
 }
 
 impl Updater for IstUpdater {
-    async fn get_credentials(&mut self) -> Result<(), reqwest::Error> {
+    type Item = Self;
+
+    async fn authorize(&self) -> Result<Token, anyhow::Error> {
+        let client = reqwest::Client::new();
+
         let mut body = HashMap::new();
         body.insert("client_id", std::env::var("IBB_CLIENT_ID").unwrap());
         body.insert("client_secret", std::env::var("IBB_CLIENT_SECRET").unwrap());
         body.insert("grant_type", "client_credentials".to_string());
         body.insert("scope", std::env::var("IBB_CLIENT_SCOPE").unwrap());
 
-        let response: IstTokensResponse = self
-            .client
+        let response: IstTokensResponse = client
             .post("https://ntcapi.iett.istanbul/oauth2/v2/auth")
             .headers(self.headers.clone())
             .json(&body)
@@ -60,16 +68,14 @@ impl Updater for IstUpdater {
             .json()
             .await?;
 
-        self.headers.insert(
-            "Authorization",
-            format!("Bearer {}", response.access_token).parse().unwrap(),
-        );
-
-        info!("got tokens");
-        Ok(())
+        Ok(response.into())
     }
 
-    async fn insert_lines(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_lines(
+        &self,
+        db: &PgPool,
+        rq: &RequestClient<Self>,
+    ) -> Result<(), anyhow::Error> {
         let body = r#"
         <soap:Envelope
             xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -83,13 +89,13 @@ impl Updater for IstUpdater {
         "#;
 
         info!("getting lines");
-        let response = self
-            .client
-            .post("https://api.ibb.gov.tr/iett/UlasimAnaVeri/HatDurakGuzergah.asmx")
-            .header("Content-Type", "text/xml; charset=UTF-8")
-            .header("SOAPAction", r#""http://tempuri.org/GetHat_json""#)
-            .body(body)
-            .send()
+        let response = rq
+            .request(|http, _| {
+                http.post("https://api.ibb.gov.tr/iett/UlasimAnaVeri/HatDurakGuzergah.asmx")
+                    .header("Content-Type", "text/xml; charset=UTF-8")
+                    .header("SOAPAction", r#""http://tempuri.org/GetHat_json""#)
+                    .body(body)
+            })
             .await?;
 
         let text = response.text().await?;
@@ -118,7 +124,12 @@ impl Updater for IstUpdater {
         Ok(())
     }
 
-    async fn insert_routes(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
+    async fn insert_routes(
+        &self,
+        db: &PgPool,
+        rq: &RequestClient<Self>,
+        offset: usize,
+    ) -> Result<(), anyhow::Error> {
         let lines = sqlx::query_as!(
             DatabaseLine,
             r#"
@@ -147,16 +158,14 @@ impl Updater for IstUpdater {
 
                 info!(
                     "{}: getting line routes for {}, direction {}",
-                    index,
-                    &line.code,
-                    direction
+                    index, &line.code, direction
                 );
-                let line_routes = self
-                    .client
-                    .post("https://ntcapi.iett.istanbul/service")
-                    .body(routes_body.to_string())
-                    .headers(self.headers.clone())
-                    .send()
+                let line_routes = rq
+                    .request(|http, _| {
+                        http.post("https://ntcapi.iett.istanbul/service")
+                            .body(routes_body.to_string())
+                            .headers(self.headers.clone())
+                    })
                     .await?
                     .json::<Vec<IstLineRoutesResponse>>()
                     .await?;
@@ -167,24 +176,32 @@ impl Updater for IstUpdater {
                 }
 
                 let routes_insert_result = QueryBuilder::new(
-                    "INSERT INTO routes (agency_id, code, title, type, route_code, city)"
+                    "INSERT INTO routes (agency_id, code, title, type, route_code, city)",
                 )
                 .push_values(line_routes, |mut b, record| {
                     b.push_bind(1)
-                    .push_bind(record.line_code)
-                    .push_bind(record.route_name.unwrap_or(record.line_name.to_string()).trim().to_string())
-                    .push_bind(3)
-                    .push_bind(record.route_code)
-                    .push_bind("istanbul");
+                        .push_bind(record.line_code)
+                        .push_bind(
+                            record
+                                .route_name
+                                .unwrap_or(record.line_name.to_string())
+                                .trim()
+                                .to_string(),
+                        )
+                        .push_bind(3)
+                        .push_bind(record.route_code)
+                        .push_bind("istanbul");
                 })
-                .push("
+                .push(
+                    "
                     ON CONFLICT (route_code, city) DO UPDATE SET
                         agency_id=EXCLUDED.agency_id,
                         code=EXCLUDED.code,
                         title=EXCLUDED.title,
                         type=EXCLUDED.type,
                         route_code=EXCLUDED.route_code
-                ")
+                ",
+                )
                 .build()
                 .execute(db)
                 .await?;
@@ -203,7 +220,12 @@ impl Updater for IstUpdater {
         Ok(())
     }
 
-    async fn insert_line_stops(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
+    async fn insert_line_stops(
+        &self,
+        db: &PgPool,
+        rq: &RequestClient<Self>,
+        offset: usize,
+    ) -> Result<(), anyhow::Error> {
         let lines = sqlx::query_as!(
             DatabaseLine,
             r#"
@@ -234,12 +256,12 @@ impl Updater for IstUpdater {
                     }
                 });
 
-                let route_stops = self
-                    .client
-                    .post("https://ntcapi.iett.istanbul/service")
-                    .body(stops_body.to_string())
-                    .headers(self.headers.clone())
-                    .send()
+                let route_stops = rq
+                    .request(|http, _| {
+                        http.post("https://ntcapi.iett.istanbul/service")
+                            .body(stops_body.to_string())
+                            .headers(self.headers.clone())
+                    })
                     .await?
                     .json::<Vec<IstLineStopsResponse>>()
                     .await?;
@@ -326,7 +348,11 @@ impl Updater for IstUpdater {
         Ok(())
     }
 
-    async fn insert_route_paths(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_route_paths(
+        &self,
+        db: &PgPool,
+        rq: &RequestClient<Self>,
+    ) -> Result<(), anyhow::Error> {
         let routes = sqlx::query_as!(
             DatabaseRoute,
             "SELECT
@@ -351,10 +377,10 @@ impl Updater for IstUpdater {
             if !Path::exists(&file_path) {
                 info!("downloading geojson file because It's not found");
 
-                let response = self.client
-                    .get("https://data.ibb.gov.tr/dataset/iett-hat-guzergahlari/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/geojson_download")
-                    .send()
-                    .await?;
+                let response = rq
+                    .request(|http, _| {
+                        http.get("https://data.ibb.gov.tr/dataset/iett-hat-guzergahlari/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/geojson_download")
+                    }).await?;
 
                 let response_body = response.bytes().await?;
 
@@ -378,41 +404,52 @@ impl Updater for IstUpdater {
             .filter_map(|rout| rout.route_code)
             .collect();
 
-        let filtered_routes = geojson.features
+        let filtered_routes = geojson
+            .features
             .into_iter()
             .filter(|feat| database_route_codes.contains(&feat.properties.route_code))
             .collect::<Vec<IstRoutePathGeoJsonFeature>>();
 
-        let inserted_route_paths_result = QueryBuilder::new(
-            "INSERT INTO route_paths (route_code, path, city)"
-        )
-            .push_values(filtered_routes, |mut b, record| {
-                let coords = record.geometry.coordinates
-                    .into_iter()
-                    .map(|coord| LatLng {
-                        lng: *coord.get(0).unwrap(),
-                        lat: *coord.get(1).unwrap(),
-                    })
-                    .collect::<Vec<LatLng>>();
+        let inserted_route_paths_result =
+            QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
+                .push_values(filtered_routes, |mut b, record| {
+                    let coords = record
+                        .geometry
+                        .coordinates
+                        .into_iter()
+                        .map(|coord| LatLng {
+                            lng: *coord.get(0).unwrap(),
+                            lat: *coord.get(1).unwrap(),
+                        })
+                        .collect::<Vec<LatLng>>();
 
-                b.push_bind(record.properties.route_code)
-                    .push_bind(Json(coords))
-                    .push_bind("istanbul");
-
-            })
-            .push("ON CONFLICT (route_code, city) DO UPDATE SET
+                    b.push_bind(record.properties.route_code)
+                        .push_bind(Json(coords))
+                        .push_bind("istanbul");
+                })
+                .push(
+                    "ON CONFLICT (route_code, city) DO UPDATE SET
                          path=EXCLUDED.path
-            ")
-            .build()
-            .execute(db)
-            .await?;
+            ",
+                )
+                .build()
+                .execute(db)
+                .await?;
 
-        info!("inserted/updated {} route paths", inserted_route_paths_result.rows_affected());
+        info!(
+            "inserted/updated {} route paths",
+            inserted_route_paths_result.rows_affected()
+        );
 
         Ok(())
     }
 
-    async fn insert_timetable(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
+    async fn insert_timetable(
+        &self,
+        db: &PgPool,
+        rq: &RequestClient<Self>,
+        offset: usize,
+    ) -> Result<(), anyhow::Error> {
         let lines = sqlx::query_as!(
             DatabaseLine,
             r#"
@@ -440,12 +477,12 @@ impl Updater for IstUpdater {
             });
 
             info!("{}: getting timetable for {}", index, &line.code);
-            let timetable_response = self
-                .client
-                .post("https://ntcapi.iett.istanbul/service")
-                .body(timetable_body.to_string())
-                .headers(self.headers.clone())
-                .send()
+            let timetable_response = rq
+                .request(|http, _| {
+                    http.post("https://ntcapi.iett.istanbul/service")
+                        .body(timetable_body.to_string())
+                        .headers(self.headers.clone())
+                })
                 .await?
                 .json::<Vec<IstTimetableResponse>>()
                 .await?;

@@ -1,13 +1,15 @@
 #![allow(dead_code)]
 
-use sqlx::PgPool;
-use updater::Updater;
 use clap::Parser;
+use sqlx::PgPool;
 
-mod models;
-mod updater;
-mod updaters;
+use crate::models::updater::Updater;
+use crate::request_client::RequestClient;
+
 mod constants;
+mod models;
+mod request_client;
+mod updaters;
 
 #[derive(Parser, Debug)]
 #[command(about)]
@@ -45,46 +47,52 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().expect(".env file is required");
     tracing_subscriber::fmt().init();
 
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
+    let database_url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
     let pool = PgPool::connect(&database_url).await?;
 
     if args.city.contains(&"istanbul".to_string()) {
-        let mut ist_updater = updaters::ist::IstUpdater::new();
-        ist_updater.get_credentials().await?;
+        let ist = RequestClient::new(updaters::ist::IstUpdater::new());
+        // let mut ist_updater = updaters::ist::IstUpdater::new();
+        // ist_updater.get_credentials().await?;
 
         if args.update_lines {
-            ist_updater.insert_lines(&pool).await?;
+            ist.updater.insert_lines(&pool, &ist).await?;
         }
 
         if args.update_routes {
-            ist_updater.insert_routes(&pool, args.offset).await?;
+            ist.updater.insert_routes(&pool, &ist, args.offset).await?;
         }
 
         if args.update_line_stops {
-            ist_updater.insert_line_stops(&pool, args.offset).await?;
+            ist.updater
+                .insert_line_stops(&pool, &ist, args.offset)
+                .await?;
         }
 
         if args.update_route_paths {
-            ist_updater.insert_route_paths(&pool).await?;
+            ist.updater.insert_route_paths(&pool, &ist).await?;
         }
 
         if args.update_timetable {
-            ist_updater.insert_timetable(&pool, args.offset).await?;
+            ist.updater
+                .insert_timetable(&pool, &ist, args.offset)
+                .await?;
         }
     }
 
-    if args.city.contains(&"izmir".to_string()) {
-        let mut izm_updater = updaters::izm::IzmUpdater::new();
-        izm_updater.get_credentials().await?;
-        
-        if args.update_lines {
-            izm_updater.insert_lines(&pool).await?;
-        }
+    // if args.city.contains(&"izmir".to_string()) {
+    //     let mut izm_updater = updaters::izm::IzmUpdater::new();
+    //     izm_updater.get_credentials().await?;
 
-        if args.update_line_stops {
-            izm_updater.insert_line_stops(&pool, args.offset).await?;
-        }
-    }
+    //     if args.update_lines {
+    //         izm_updater.insert_lines(&pool).await?;
+    //     }
+
+    //     if args.update_line_stops {
+    //         izm_updater.insert_line_stops(&pool, args.offset).await?;
+    //     }
+    // }
 
     Ok(())
 }

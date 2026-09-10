@@ -3,7 +3,6 @@ use sqlx::types::chrono::NaiveTime;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DatabaseRoute {
-    // pub id: i32,
     pub agency_id: Option<i32>,
     pub code: Option<String>,
     pub title: Option<String>,
@@ -11,7 +10,6 @@ pub struct DatabaseRoute {
     pub description: Option<String>,
     pub route_code: Option<String>,
     pub city: String,
-    // pub route_path: Option<sqlx::types::JsonValue>,
 }
 
 #[derive(Debug)]

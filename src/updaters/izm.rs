@@ -6,18 +6,21 @@ use sqlx::{PgPool, QueryBuilder, types::Json};
 use tracing::{info, warn};
 
 use crate::{
-    constants::SLEEP_DURATION, models::{
+    constants::SLEEP_DURATION,
+    models::{
         database::{DatabaseLine, DatabaseLineStop, DatabaseRoute, DatabaseTimetable, LatLng},
         izm::{
             Direction, EshotLineResponse, EshotLineStation, IzmLine, IzmLinesResponse,
             IzmLoginBody, IzmLoginBodyResponse, IzmSearchResponse, IzmSearchResult,
         },
-    }, updater::Updater
+        token::Token,
+        updater::Updater,
+    },
+    request_client::RequestClient,
 };
 
 #[derive(Debug)]
 pub struct IzmUpdater {
-    pub client: reqwest::Client,
     pub headers: HeaderMap,
 }
 
@@ -29,23 +32,70 @@ impl IzmUpdater {
             "application/json; charset=UTF-8".parse().unwrap(),
         );
 
-        Self {
-            client: reqwest::Client::new(),
-            headers,
-        }
+        Self { headers }
     }
 }
 
 impl Updater for IzmUpdater {
-    async fn get_credentials(&mut self) -> Result<(), reqwest::Error> {
+    type Item = Self;
+
+    // async fn get_credentials(&mut self) -> Result<(), reqwest::Error> {
+    //     let login_body = IzmLoginBody {
+    //         user_name: "tur".to_string(),
+    //         password: "t@r!".to_string(),
+    //     };
+
+    //     info!("getting login tokens");
+    //     let login_response = self
+    //         .client
+    //         .post("https://appapi.eshot.gov.tr/api/Transportation/Login")
+    //         .headers(self.headers.clone())
+    //         .json(&login_body)
+    //         .send()
+    //         .await?
+    //         .json::<IzmLoginBodyResponse>()
+    //         .await?;
+
+    //     info!("{:?}", login_response);
+
+    //     self.headers.insert(
+    //         "Authorization",
+    //         format!("Bearer {}", login_response.data.token)
+    //             .parse()
+    //             .unwrap(),
+    //     );
+
+    //     info!("getting anonymous user using login token");
+    //     let anonymous_response = self
+    //         .client
+    //         .get("https://appapi.eshot.gov.tr/api/TransportationUser/getAnonymousUser")
+    //         .headers(self.headers.clone())
+    //         .send()
+    //         .await?
+    //         .json::<IzmLoginBodyResponse>()
+    //         .await?;
+
+    //     self.headers.insert(
+    //         "Authorization",
+    //         format!("Bearer {}", anonymous_response.data.token)
+    //             .parse()
+    //             .unwrap(),
+    //     );
+
+    //     info!("got tokens");
+    //     Ok(())
+    // }
+
+    async fn authorize(&self) -> Result<crate::models::token::Token, anyhow::Error> {
+        let client = reqwest::Client::new();
+
         let login_body = IzmLoginBody {
             user_name: "tur".to_string(),
             password: "t@r!".to_string(),
         };
 
         info!("getting login tokens");
-        let login_response = self
-            .client
+        let login_response = client
             .post("https://appapi.eshot.gov.tr/api/Transportation/Login")
             .headers(self.headers.clone())
             .json(&login_body)
@@ -56,16 +106,8 @@ impl Updater for IzmUpdater {
 
         info!("{:?}", login_response);
 
-        self.headers.insert(
-            "Authorization",
-            format!("Bearer {}", login_response.data.token)
-                .parse()
-                .unwrap(),
-        );
-
         info!("getting anonymous user using login token");
-        let anonymous_response = self
-            .client
+        let anonymous_response = client
             .get("https://appapi.eshot.gov.tr/api/TransportationUser/getAnonymousUser")
             .headers(self.headers.clone())
             .send()
@@ -73,18 +115,16 @@ impl Updater for IzmUpdater {
             .json::<IzmLoginBodyResponse>()
             .await?;
 
-        self.headers.insert(
-            "Authorization",
-            format!("Bearer {}", anonymous_response.data.token)
-                .parse()
-                .unwrap(),
-        );
-
-        info!("got tokens");
-        Ok(())
+        Ok(Token {
+            access_token: anonymous_response.data.token,
+        })
     }
 
-    async fn insert_lines(&self, db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_lines(
+        &self,
+        db: &PgPool,
+        rq: &RequestClient<Self>,
+    ) -> Result<(), anyhow::Error> {
         info!("getting lines");
 
         let mut lines: Vec<IzmLine> = Vec::with_capacity(400);
@@ -94,14 +134,14 @@ impl Updater for IzmUpdater {
         while !stop {
             info!("getting lines offset {offset}");
 
-            let response = self
-                .client
-                .get("https://acikveri.bizizmir.com/api/3/action/datastore_search")
-                .query(&vec![
-                    ("resource_id", "bd6c84f8-49ba-4cf4-81f8-81a0fbb5caa3"),
-                    ("offset", &offset.to_string()),
-                ])
-                .send()
+            let response = rq
+                .request(|http, _| {
+                    http.get("https://acikveri.bizizmir.com/api/3/action/datastore_search")
+                        .query(&vec![
+                            ("resource_id", "bd6c84f8-49ba-4cf4-81f8-81a0fbb5caa3"),
+                            ("offset", &offset.to_string()),
+                        ])
+                })
                 .await?
                 .json::<IzmLinesResponse>()
                 .await?;
@@ -161,17 +201,20 @@ impl Updater for IzmUpdater {
             })
             .collect::<Vec<DatabaseRoute>>();
 
-        let routes_insert_result = QueryBuilder::new("INSERT INTO routes (agency_id, code, title, type, description, route_code, city)")
-            .push_values(route_codes, |mut b, record| {
-                b.push_bind(record.agency_id);
-                b.push_bind(record.code);
-                b.push_bind(record.title);
-                b.push_bind(record.r#type);
-                b.push_bind(record.description);
-                b.push_bind(record.route_code);
-                b.push_bind("izmir");
-            })
-            .push("
+        let routes_insert_result = QueryBuilder::new(
+            "INSERT INTO routes (agency_id, code, title, type, description, route_code, city)",
+        )
+        .push_values(route_codes, |mut b, record| {
+            b.push_bind(record.agency_id);
+            b.push_bind(record.code);
+            b.push_bind(record.title);
+            b.push_bind(record.r#type);
+            b.push_bind(record.description);
+            b.push_bind(record.route_code);
+            b.push_bind("izmir");
+        })
+        .push(
+            "
                 ON CONFLICT (route_code, city) DO UPDATE SET
                     agency_id=EXCLUDED.agency_id,
                     code=EXCLUDED.code,
@@ -179,10 +222,11 @@ impl Updater for IzmUpdater {
                     type=EXCLUDED.type,
                     description=EXCLUDED.description,
                     route_code=EXCLUDED.route_code
-            ")
-            .build()
-            .execute(db)
-            .await?;
+            ",
+        )
+        .build()
+        .execute(db)
+        .await?;
 
         info!(
             "inserted/updated {} route rows",
@@ -192,12 +236,22 @@ impl Updater for IzmUpdater {
         Ok(())
     }
 
-    async fn insert_routes(&self, _db: &PgPool, _offset: usize) -> Result<(), anyhow::Error> {
+    async fn insert_routes(
+        &self,
+        _db: &PgPool,
+        _rq: &RequestClient<Self>,
+        _offset: usize,
+    ) -> Result<(), anyhow::Error> {
         info!("routes are inserted for izmir when lines are inserted");
         Ok(())
     }
 
-    async fn insert_line_stops(&self, db: &PgPool, offset: usize) -> Result<(), anyhow::Error> {
+    async fn insert_line_stops(
+        &self,
+        db: &PgPool,
+        rq: &RequestClient<Self>,
+        offset: usize,
+    ) -> Result<(), anyhow::Error> {
         info!("getting lines");
 
         let lines = sqlx::query_as!(
@@ -215,12 +269,14 @@ impl Updater for IzmUpdater {
             let search_result = match found_in_cache {
                 Some(result) => Some(result.clone()),
                 None => {
-                    let search_results = self
-                        .client
-                        .post("https://appapi.eshot.gov.tr/api/Assistant/getLineOrStationByName")
-                        .headers(self.headers.clone())
-                        .json(&line.code.to_string())
-                        .send()
+                    let search_results = rq
+                        .request(|http, _| {
+                            http.post(
+                                "https://appapi.eshot.gov.tr/api/Assistant/getLineOrStationByName",
+                            )
+                            .headers(self.headers.clone())
+                            .json(&line.code.to_string())
+                        })
                         .await?
                         .json::<IzmSearchResponse>()
                         .await?;
@@ -246,13 +302,16 @@ impl Updater for IzmUpdater {
                 continue;
             };
 
-            info!("{} getting line id: {}, code: {}", index, &result.id, result.code);
-            let line_data = self
-                .client
-                .post("https://appapi.eshot.gov.tr/api/Assistant/getLine")
-                .headers(self.headers.clone())
-                .body(result.id.to_string())
-                .send()
+            info!(
+                "{} getting line id: {}, code: {}",
+                index, &result.id, result.code
+            );
+            let line_data = rq
+                .request(|http, _| {
+                    http.post("https://appapi.eshot.gov.tr/api/Assistant/getLine")
+                        .headers(self.headers.clone())
+                        .body(result.id.to_string())
+                })
                 .await?
                 .json::<EshotLineResponse>()
                 .await?;
@@ -477,12 +536,21 @@ impl Updater for IzmUpdater {
         Ok(())
     }
 
-    async fn insert_route_paths(&self, _db: &PgPool) -> Result<(), anyhow::Error> {
+    async fn insert_route_paths(
+        &self,
+        _db: &PgPool,
+        _rq: &RequestClient<Self>,
+    ) -> Result<(), anyhow::Error> {
         info!("route paths for izmir inserted when line stops are inserted");
         Ok(())
     }
 
-    async fn insert_timetable(&self, _db: &PgPool, _offset: usize) -> Result<(), anyhow::Error> {
+    async fn insert_timetable(
+        &self,
+        _db: &PgPool,
+        _rq: &RequestClient<Self>,
+        _offset: usize,
+    ) -> Result<(), anyhow::Error> {
         info!("timetable for izmir inserted when line stops are inserted");
         Ok(())
     }
