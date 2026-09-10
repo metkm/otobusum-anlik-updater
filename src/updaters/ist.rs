@@ -170,7 +170,7 @@ impl Updater for IstUpdater {
                     .json::<Vec<IstLineRoutesResponse>>()
                     .await?;
 
-                if line_routes.len() == 0 {
+                if line_routes.is_empty() {
                     info!("skipping {}, routes vec is empty", &line.code);
                     continue;
                 }
@@ -279,7 +279,7 @@ impl Updater for IstUpdater {
                     })
                     .collect();
 
-                if stops.len() < 1 {
+                if stops.is_empty() {
                     warn!("{}:no stops found for {}. skipping", index, &line.code);
                     continue;
                 }
@@ -289,8 +289,8 @@ impl Updater for IstUpdater {
                 )
                 .push_values(&stops, |mut b, record| {
                     b.push_bind(&line.code)
-                        .push_bind(&record.stop_code)
-                        .push_bind(&record.stop_order)
+                        .push_bind(record.stop_code)
+                        .push_bind(record.stop_order)
                         .push_bind("istanbul")
                         .push_bind(&record.route_code);
                 })
@@ -374,7 +374,7 @@ impl Updater for IstUpdater {
         create_dir(Path::new("./data")).ok();
 
         let geojson: IstRoutePathGeoJson = {
-            if !Path::exists(&file_path) {
+            if !Path::exists(file_path) {
                 info!("downloading geojson file because It's not found");
 
                 let response = rq
@@ -385,13 +385,13 @@ impl Updater for IstUpdater {
                 let response_body = response.bytes().await?;
 
                 let mut out = File::create("./data/path.geojson")?;
-                out.write(&response_body)?;
+                out.write_all(&response_body)?;
 
                 serde_json::from_slice(&response_body.slice(..))?
             } else {
                 info!("parsing geojson file");
 
-                let mut file = File::open(&file_path)?;
+                let mut file = File::open(file_path)?;
                 let mut buffer = String::with_capacity(1_000_000);
 
                 file.read_to_string(&mut buffer)?;
@@ -418,7 +418,7 @@ impl Updater for IstUpdater {
                         .coordinates
                         .into_iter()
                         .map(|coord| LatLng {
-                            lng: *coord.get(0).unwrap(),
+                            lng: *coord.first().unwrap(),
                             lat: *coord.get(1).unwrap(),
                         })
                         .collect::<Vec<LatLng>>();

@@ -60,9 +60,7 @@ impl<U: Updater> RequestClient<U> {
                 .await;
 
             match response {
-                Ok(resp) => {
-                    return Ok(resp)
-                },
+                Ok(resp) => return Ok(resp),
                 Err(error) => {
                     self.authorize().await.ok();
                     warn!("making request failed {:?}", error.url());

@@ -44,7 +44,7 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    dotenv::dotenv().expect(".env file is required");
+    dotenv::dotenv().ok();
     tracing_subscriber::fmt().init();
 
     let database_url =
@@ -53,8 +53,6 @@ async fn main() -> anyhow::Result<()> {
 
     if args.city.contains(&"istanbul".to_string()) {
         let ist = RequestClient::new(updaters::ist::IstUpdater::new());
-        // let mut ist_updater = updaters::ist::IstUpdater::new();
-        // ist_updater.get_credentials().await?;
 
         if args.update_lines {
             ist.updater.insert_lines(&pool, &ist).await?;
@@ -81,18 +79,19 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // if args.city.contains(&"izmir".to_string()) {
-    //     let mut izm_updater = updaters::izm::IzmUpdater::new();
-    //     izm_updater.get_credentials().await?;
+    if args.city.contains(&"izmir".to_string()) {
+        let izm = RequestClient::new(updaters::izm::IzmUpdater::new());
 
-    //     if args.update_lines {
-    //         izm_updater.insert_lines(&pool).await?;
-    //     }
+        if args.update_lines {
+            izm.updater.insert_lines(&pool, &izm).await?;
+        }
 
-    //     if args.update_line_stops {
-    //         izm_updater.insert_line_stops(&pool, args.offset).await?;
-    //     }
-    // }
+        if args.update_line_stops {
+            izm.updater
+                .insert_line_stops(&pool, &izm, args.offset)
+                .await?;
+        }
+    }
 
     Ok(())
 }

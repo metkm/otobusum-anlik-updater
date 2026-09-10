@@ -319,7 +319,7 @@ impl Updater for IzmUpdater {
             for route in line_data.data {
                 let route_code = format!(
                     "{}_{:?}_D0",
-                    &line.code,
+                    line.code,
                     Direction::try_from(route.direction).unwrap()
                 );
 
@@ -372,7 +372,7 @@ impl Updater for IzmUpdater {
                         .iter()
                         .enumerate()
                         .filter_map(|(index, station)| {
-                            let target = format!("{}-{}", &route_code, &station.code);
+                            let target = format!("{}-{}", route_code, station.code);
 
                             if found_line_stops.contains(&target) {
                                 None

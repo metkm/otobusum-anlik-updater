@@ -55,10 +55,6 @@ impl PartialEq for IstLineStopsResponse {
     fn eq(&self, other: &Self) -> bool {
         self.stop_code == other.stop_code
     }
-
-    fn ne(&self, other: &Self) -> bool {
-        self.stop_code != other.stop_code
-    }
 }
 
 #[derive(Deserialize)]
