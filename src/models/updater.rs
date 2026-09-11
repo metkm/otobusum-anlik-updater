@@ -30,6 +30,7 @@ pub trait Updater {
         &self,
         db: &PgPool,
         rq: &RequestClient<Self::Item>,
+        offset: usize,
     ) -> Result<(), anyhow::Error>;
     async fn insert_timetable(
         &self,

@@ -69,7 +69,9 @@ async fn main() -> anyhow::Result<()> {
         }
 
         if args.update_route_paths {
-            ist.updater.insert_route_paths(&pool, &ist).await?;
+            ist.updater
+                .insert_route_paths(&pool, &ist, args.offset)
+                .await?;
         }
 
         if args.update_timetable {

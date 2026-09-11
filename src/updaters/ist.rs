@@ -156,15 +156,19 @@ impl Updater for IstUpdater {
                     "{}: getting line routes for {}, direction {}",
                     index, &line.code, direction
                 );
-                let line_routes = rq
+                let Ok(line_routes) = rq
                     .request(|http, _| {
                         http.post("https://ntcapi.iett.istanbul/service")
                             .body(routes_body.to_string())
                             .headers(self.headers.clone())
                     })
-                    .await?
-                    .json::<Vec<IstLineRoutesResponse>>()
-                    .await?;
+                    .await
+                else {
+                    warn!("skipping {} because it keeps returning error", line.code);
+                    continue;
+                };
+
+                let line_routes = line_routes.json::<Vec<IstLineRoutesResponse>>().await?;
 
                 if line_routes.is_empty() {
                     info!("skipping {}, routes vec is empty", &line.code);
@@ -252,15 +256,19 @@ impl Updater for IstUpdater {
                     }
                 });
 
-                let route_stops = rq
+                let Ok(response) = rq
                     .request(|http, _| {
                         http.post("https://ntcapi.iett.istanbul/service")
                             .body(stops_body.to_string())
                             .headers(self.headers.clone())
                     })
-                    .await?
-                    .json::<Vec<IstLineStopsResponse>>()
-                    .await?;
+                    .await
+                else {
+                    warn!("skipping {} because it keeps returning error", line.code);
+                    continue;
+                };
+
+                let route_stops = response.json::<Vec<IstLineStopsResponse>>().await?;
 
                 let mut stop_codes: HashSet<i32> = HashSet::new();
                 let stops: Vec<&IstLineStopsResponse> = route_stops
@@ -348,6 +356,7 @@ impl Updater for IstUpdater {
         &self,
         db: &PgPool,
         rq: &RequestClient<Self>,
+        offset: usize,
     ) -> Result<(), anyhow::Error> {
         let re = Regex::new(r#"(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)"#).unwrap();
 
@@ -384,21 +393,24 @@ impl Updater for IstUpdater {
         // .fetch_all(db)
         // .await?;
 
-        for (index, route) in routes.iter().enumerate() {
+        for (index, route) in routes.iter().skip(offset).enumerate() {
             let route_code = route.route_code.as_ref().unwrap();
             info!("{}: getting route path for {}", index, route_code);
 
-            let response = rq
+            let Ok(response) = rq
                 .request(|http, _| {
                     http.get(format!(
                         "https://iett.istanbul/tr/RouteStation/GetRoutePinV2?q={}",
                         route_code
                     ))
                 })
-                .await?
-                .json::<Vec<IstRoutePathResponse>>()
-                .await?;
+                .await
+            else {
+                warn!("skipping {} because it keeps returning error", route_code);
+                continue;
+            };
 
+            let response = response.json::<Vec<IstRoutePathResponse>>().await?;
             let route_paths = response.get(0);
 
             let Some(route_path) = route_paths else {
@@ -439,7 +451,6 @@ impl Updater for IstUpdater {
                 "inserted/updated {} route paths",
                 inserted_route_paths_result.rows_affected()
             );
-
 
             info!("sleeping for {} seconds", SLEEP_DURATION.as_secs());
             tokio::time::sleep(SLEEP_DURATION).await;

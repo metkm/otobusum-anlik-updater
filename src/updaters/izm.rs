@@ -540,6 +540,7 @@ impl Updater for IzmUpdater {
         &self,
         _db: &PgPool,
         _rq: &RequestClient<Self>,
+        _offset: usize,
     ) -> Result<(), anyhow::Error> {
         info!("route paths for izmir inserted when line stops are inserted");
         Ok(())

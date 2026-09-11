@@ -46,7 +46,7 @@ impl<U: Updater> RequestClient<U> {
     where
         F: Fn(&reqwest::Client, &str) -> RequestBuilder,
     {
-        const MAX_RETRIES: u64 = 5;
+        const MAX_RETRIES: u64 = 4;
 
         for attempt in 0..MAX_RETRIES {
             info!("attempt at making request {}", attempt);
@@ -60,16 +60,23 @@ impl<U: Updater> RequestClient<U> {
                 .await;
 
             match response {
-                Ok(resp) => return Ok(resp),
+                Ok(resp) => match resp.error_for_status() {
+                    Ok(res) => return Ok(res),
+                    Err(err) => {
+                        self.authorize().await.ok();
+                        warn!("request returned error {:?} {:?}", err.status(), err.url());
+                    }
+                },
                 Err(error) => {
-                    self.authorize().await.ok();
                     warn!("making request failed {:?}", error.url());
                 }
             }
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(25 * attempt)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(5 * attempt)).await;
         }
 
-        unreachable!()
+        Err(anyhow::anyhow!(
+            "even after 5 retries the request still has failed"
+        ))
     }
 }
