@@ -40,9 +40,9 @@ pub struct IstLineStopsResponse {
     #[serde(alias = "GUZERGAH_GUZERGAH_KODU")]
     pub route_code: String,
     #[serde(alias = "GUZERGAH_SEGMENT_SIRA")]
-    pub stop_order: i32,
+    pub order: i32,
     #[serde(alias = "DURAK_ADI")]
-    pub stop_name: String,
+    pub name: String,
     #[serde(alias = "DURAK_DURAK_KODU")]
     pub stop_code: i32,
     #[serde(alias = "DURAK_GEOLOC")]

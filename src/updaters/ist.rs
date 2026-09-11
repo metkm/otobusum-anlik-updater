@@ -290,7 +290,7 @@ impl Updater for IstUpdater {
                 .push_values(&stops, |mut b, record| {
                     b.push_bind(&line.code)
                         .push_bind(record.stop_code)
-                        .push_bind(record.stop_order)
+                        .push_bind(record.order)
                         .push_bind("istanbul")
                         .push_bind(&record.route_code);
                 })
@@ -312,11 +312,11 @@ impl Updater for IstUpdater {
                 );
 
                 let insert_stops_result = QueryBuilder::new(
-                    "INSERT INTO stops (stop_code, stop_name, x_coord, y_coord, province, city)",
+                    "INSERT INTO stops (stop_code, name, lng, lat, province, city)",
                 )
                 .push_values(&stops, |mut b, record| {
                     b.push_bind(record.stop_code)
-                        .push_bind(&record.stop_name)
+                        .push_bind(&record.name)
                         .push_bind(record.stop_geo.x)
                         .push_bind(record.stop_geo.y)
                         .push_bind(&record.province)
@@ -325,9 +325,9 @@ impl Updater for IstUpdater {
                 .push(
                     "
                     ON CONFLICT (stop_code, city) DO UPDATE SET
-                        stop_name=EXCLUDED.stop_name,
-                        x_coord=EXCLUDED.x_coord,
-                        y_coord=EXCLUDED.y_coord
+                        name=EXCLUDED.name,
+                        lng=EXCLUDED.lng,
+                        lat=EXCLUDED.lat
                 ",
                 )
                 .build()
