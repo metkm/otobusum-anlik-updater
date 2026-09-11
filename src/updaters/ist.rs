@@ -434,36 +434,39 @@ impl Updater for IstUpdater {
             .filter(|x| !geojson_route_codes.contains(*x))
             .collect();
 
-        let inserted_using_geojson_file_count =
-            QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
-                .push_values(filtered_geojson_route_paths, |mut b, record| {
-                    let coords = record
-                        .geometry
-                        .coordinates
-                        .iter()
-                        .map(|coord| LatLng {
-                            lng: *coord.first().unwrap(),
-                            lat: *coord.get(1).unwrap(),
-                        })
-                        .collect::<Vec<LatLng>>();
+        if !filtered_geojson_route_paths.is_empty() {
+            let inserted_using_geojson_file_count =
+                QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
+                    .push_values(filtered_geojson_route_paths, |mut b, record| {
+                        let coords = record
+                            .geometry
+                            .coordinates
+                            .iter()
+                            .map(|coord| LatLng {
+                                lng: *coord.first().unwrap(),
+                                lat: *coord.get(1).unwrap(),
+                            })
+                            .collect::<Vec<LatLng>>();
 
-                    b.push_bind(record.properties.route_code.clone())
-                        .push_bind(Json(coords))
-                        .push_bind("istanbul");
-                })
-                .push(
-                    "ON CONFLICT (route_code, city) DO UPDATE SET
-                         path=EXCLUDED.path
-            ",
-                )
-                .build()
-                .execute(db)
-                .await?;
+                        b.push_bind(record.properties.route_code.clone())
+                            .push_bind(Json(coords))
+                            .push_bind("istanbul");
+                    })
+                    .push(
+                        "ON CONFLICT (route_code, city) DO UPDATE SET
+                            path=EXCLUDED.path
+                ",
+                    )
+                    .build()
+                    .execute(db)
+                    .await?;
 
-        info!(
-            "inserted {} records using the geojson file",
-            inserted_using_geojson_file_count.rows_affected()
-        );
+            info!(
+                "inserted {} records using the geojson file",
+                inserted_using_geojson_file_count.rows_affected()
+            );
+        }
+
         info!(
             "{} route paths missing from the geojson file. Using web api to get them.",
             geojson_missing_route_codes.len()

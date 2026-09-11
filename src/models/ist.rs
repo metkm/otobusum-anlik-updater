@@ -79,18 +79,18 @@ pub struct IstTimetableResponse {
     pub day_type: DayType,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IstRoutePathGeoJsonGeometry {
     pub coordinates: Vec<[f64; 2]>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IstRoutePathGeoJsonProperties {
     #[serde(alias = "GUZERGAH_KODU")]
     pub route_code: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IstRoutePathGeoJsonFeature {
     pub properties: IstRoutePathGeoJsonProperties,
     pub geometry: IstRoutePathGeoJsonGeometry,
