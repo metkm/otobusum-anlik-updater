@@ -1,13 +1,9 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs::{File, create_dir},
-    io::{Read, Write},
-    path::Path,
-};
+use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDateTime;
+use regex::Regex;
 use reqwest::header::HeaderMap;
-use sqlx::{PgPool, QueryBuilder, types::Json};
+use sqlx::{PgPool, QueryBuilder};
 use tracing::{info, warn};
 
 use crate::{
@@ -15,8 +11,8 @@ use crate::{
     models::{
         database::{DatabaseLine, DatabaseRoute, DatabaseTimetable, LatLng},
         ist::{
-            DayType, IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathGeoJson,
-            IstRoutePathGeoJsonFeature, IstTimetableResponse, IstTokensResponse,
+            DayType, IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathResponse,
+            IstTimetableResponse, IstTokensResponse,
         },
         soap::{BusLineResponseSoap, BusLineSoap},
         token::Token,
@@ -353,6 +349,8 @@ impl Updater for IstUpdater {
         db: &PgPool,
         rq: &RequestClient<Self>,
     ) -> Result<(), anyhow::Error> {
+        let re = Regex::new(r#"(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)"#).unwrap();
+
         let routes = sqlx::query_as!(
             DatabaseRoute,
             "SELECT
@@ -370,76 +368,170 @@ impl Updater for IstUpdater {
         .fetch_all(db)
         .await?;
 
-        let file_path = Path::new("./data/path.geojson");
-        create_dir(Path::new("./data")).ok();
+        // let lines = sqlx::query_as!(
+        //     DatabaseLine,
+        //     r#"
+        //         SELECT
+        //             *
+        //         FROM
+        //             lines
+        //         WHERE
+        //             city = 'istanbul'
+        //         ORDER BY
+        //             code
+        //     "#
+        // )
+        // .fetch_all(db)
+        // .await?;
 
-        let geojson: IstRoutePathGeoJson = {
-            if !Path::exists(file_path) {
-                info!("downloading geojson file because It's not found");
+        for (index, route) in routes.iter().enumerate() {
+            let route_code = route.route_code.as_ref().unwrap();
+            info!("{}: getting route path for {}", index, route_code);
 
-                let response = rq
-                    .request(|http, _| {
-                        http.get("https://data.ibb.gov.tr/dataset/iett-hat-guzergahlari/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/geojson_download")
-                    }).await?;
-
-                let response_body = response.bytes().await?;
-
-                let mut out = File::create("./data/path.geojson")?;
-                out.write_all(&response_body)?;
-
-                serde_json::from_slice(&response_body.slice(..))?
-            } else {
-                info!("parsing geojson file");
-
-                let mut file = File::open(file_path)?;
-                let mut buffer = String::with_capacity(1_000_000);
-
-                file.read_to_string(&mut buffer)?;
-                serde_json::from_str(&buffer)?
-            }
-        };
-
-        let database_route_codes: Vec<String> = routes
-            .into_iter()
-            .filter_map(|rout| rout.route_code)
-            .collect();
-
-        let filtered_routes = geojson
-            .features
-            .into_iter()
-            .filter(|feat| database_route_codes.contains(&feat.properties.route_code))
-            .collect::<Vec<IstRoutePathGeoJsonFeature>>();
-
-        let inserted_route_paths_result =
-            QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
-                .push_values(filtered_routes, |mut b, record| {
-                    let coords = record
-                        .geometry
-                        .coordinates
-                        .into_iter()
-                        .map(|coord| LatLng {
-                            lng: *coord.first().unwrap(),
-                            lat: *coord.get(1).unwrap(),
-                        })
-                        .collect::<Vec<LatLng>>();
-
-                    b.push_bind(record.properties.route_code)
-                        .push_bind(Json(coords))
-                        .push_bind("istanbul");
+            let response = rq
+                .request(|http, _| {
+                    http.get(format!(
+                        "https://iett.istanbul/tr/RouteStation/GetRoutePinV2?q={}",
+                        route_code
+                    ))
                 })
-                .push(
-                    "ON CONFLICT (route_code, city) DO UPDATE SET
-                         path=EXCLUDED.path
-            ",
-                )
-                .build()
-                .execute(db)
+                .await?
+                .json::<Vec<IstRoutePathResponse>>()
                 .await?;
 
-        info!(
-            "inserted/updated {} route paths",
-            inserted_route_paths_result.rows_affected()
-        );
+            let route_paths = response.get(0);
+
+            let Some(route_path) = route_paths else {
+                warn!(
+                    "skipping route path for {} because it's returned request array is empty.",
+                    route_code
+                );
+                continue;
+            };
+
+            let lat_lng_list = re
+                .captures_iter(&route_path.line)
+                .map(|x| {
+                    let numbers: Vec<&str> = x.get_match().as_str().split_whitespace().collect();
+
+                    let lng = numbers[0].parse::<f64>().unwrap_or(0.0);
+                    let lat = numbers[1].parse::<f64>().unwrap_or(0.0);
+
+                    LatLng { lng, lat }
+                })
+                .collect::<Vec<LatLng>>();
+
+            let inserted_route_paths_result = sqlx::query!(
+                r#"
+                        INSERT INTO route_paths (route_code, path, city)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT (route_code, city)
+                        DO UPDATE SET path = EXCLUDED.path
+                    "#,
+                route_code,
+                serde_json::to_value(&lat_lng_list)?,
+                "istanbul",
+            )
+            .execute(db)
+            .await?;
+
+            info!(
+                "inserted/updated {} route paths",
+                inserted_route_paths_result.rows_affected()
+            );
+
+
+            info!("sleeping for {} seconds", SLEEP_DURATION.as_secs());
+            tokio::time::sleep(SLEEP_DURATION).await;
+        }
+
+        // let routes = sqlx::query_as!(
+        //     DatabaseRoute,
+        //     "SELECT
+        //         agency_id,
+        //         code,
+        //         title,
+        //         type,
+        //         description,
+        //         route_code,
+        //         city
+        //     FROM
+        //         routes
+        //     "
+        // )
+        // .fetch_all(db)
+        // .await?;
+
+        // let file_path = Path::new("./data/path.geojson");
+        // create_dir(Path::new("./data")).ok();
+
+        // let geojson: IstRoutePathGeoJson = {
+        //     if !Path::exists(file_path) {
+        //         info!("downloading geojson file because It's not found");
+
+        //         let response = rq
+        //             .request(|http, _| {
+        //                 http.get("https://data.ibb.gov.tr/dataset/iett-hat-guzergahlari/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/geojson_download")
+        //             }).await?;
+
+        //         let response_body = response.bytes().await?;
+
+        //         let mut out = File::create("./data/path.geojson")?;
+        //         out.write_all(&response_body)?;
+
+        //         serde_json::from_slice(&response_body.slice(..))?
+        //     } else {
+        //         info!("parsing geojson file");
+
+        //         let mut file = File::open(file_path)?;
+        //         let mut buffer = String::with_capacity(1_000_000);
+
+        //         file.read_to_string(&mut buffer)?;
+        //         serde_json::from_str(&buffer)?
+        //     }
+        // };
+
+        // let database_route_codes: Vec<String> = routes
+        //     .into_iter()
+        //     .filter_map(|rout| rout.route_code)
+        //     .collect();
+
+        // let filtered_routes = geojson
+        //     .features
+        //     .into_iter()
+        //     .filter(|feat| database_route_codes.contains(&feat.properties.route_code))
+        //     .collect::<Vec<IstRoutePathGeoJsonFeature>>();
+
+        // let inserted_route_paths_result =
+        //     QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
+        //         .push_values(filtered_routes, |mut b, record| {
+        //             let coords = record
+        //                 .geometry
+        //                 .coordinates
+        //                 .into_iter()
+        //                 .map(|coord| LatLng {
+        //                     lng: *coord.first().unwrap(),
+        //                     lat: *coord.get(1).unwrap(),
+        //                 })
+        //                 .collect::<Vec<LatLng>>();
+
+        //             b.push_bind(record.properties.route_code)
+        //                 .push_bind(Json(coords))
+        //                 .push_bind("istanbul");
+        //         })
+        //         .push(
+        //             "ON CONFLICT (route_code, city) DO UPDATE SET
+        //                  path=EXCLUDED.path
+        //     ",
+        //         )
+        //         .build()
+        //         .execute(db)
+        //         .await?;
+
+        // info!(
+        //     "inserted/updated {} route paths",
+        //     inserted_route_paths_result.rows_affected()
+        // );
 
         Ok(())
     }
