@@ -380,7 +380,7 @@ impl Updater for IstUpdater {
             FROM
                 routes
             WHERE
-                city = 'istanbul' AND route_code NOT IN (SELECT route_code FROM route_paths)
+                city = 'istanbul'
             "
         )
         .fetch_all(db)
