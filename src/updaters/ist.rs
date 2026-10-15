@@ -4,6 +4,7 @@ use std::{
 };
 
 use chrono::NaiveDateTime;
+use convert_case::{Case, Casing};
 use regex::Regex;
 use reqwest::header::HeaderMap;
 use sqlx::{PgPool, QueryBuilder, types::Json};
@@ -107,7 +108,7 @@ impl Updater for IstUpdater {
         let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, title, city)")
             .push_values(bus_lines, |mut b, new_line| {
                 b.push_bind(new_line.line_code);
-                b.push_bind(new_line.line_name);
+                b.push_bind(new_line.line_name.to_case(Case::Title));
                 b.push_bind("istanbul");
             })
             .push(
@@ -324,7 +325,7 @@ impl Updater for IstUpdater {
                 )
                 .push_values(&stops, |mut b, record| {
                     b.push_bind(record.stop_code)
-                        .push_bind(&record.name)
+                        .push_bind(record.name.to_case(Case::Title))
                         .push_bind(record.stop_geo.x)
                         .push_bind(record.stop_geo.y)
                         .push_bind(&record.province)
@@ -493,7 +494,7 @@ impl Updater for IstUpdater {
             };
 
             let response = response.json::<Vec<IstRoutePathResponse>>().await?;
-            let route_paths = response.get(0);
+            let route_paths = response.first();
 
             let Some(route_path) = route_paths else {
                 warn!(

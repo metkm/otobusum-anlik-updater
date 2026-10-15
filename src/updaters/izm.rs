@@ -1,6 +1,7 @@
 use std::{collections::HashSet, str::FromStr};
 
 use chrono::NaiveTime;
+use convert_case::{Case, Casing};
 use reqwest::header::HeaderMap;
 use sqlx::{PgPool, QueryBuilder, types::Json};
 use tracing::{info, warn};
@@ -157,7 +158,7 @@ impl Updater for IzmUpdater {
         let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, title, city)")
             .push_values(&lines, |mut b, record| {
                 b.push_bind(record.line_code.to_string());
-                b.push_bind(record.line_name.clone());
+                b.push_bind(record.line_name.to_case(Case::Title));
                 b.push_bind("izmir");
             })
             .push(
@@ -344,7 +345,7 @@ impl Updater for IzmUpdater {
                 )
                 .push_values(&stops, |mut b, station| {
                     b.push_bind(station.id)
-                        .push_bind(&station.name)
+                        .push_bind(station.name.to_case(Case::Title))
                         .push_bind(station.lng)
                         .push_bind(station.lat)
                         .push_bind("izmir");
