@@ -504,7 +504,7 @@ impl Updater for IstUpdater {
                 continue;
             };
 
-            let lat_lng_list = re
+            let coords: Vec<geo_types::Coord<f64>> = re
                 .captures_iter(&route_path.line)
                 .map(|x| {
                     let numbers: Vec<&str> = x.get_match().as_str().split_whitespace().collect();
@@ -512,19 +512,29 @@ impl Updater for IstUpdater {
                     let lng = numbers[0].parse::<f64>().unwrap_or(0.0);
                     let lat = numbers[1].parse::<f64>().unwrap_or(0.0);
 
-                    LatLng { lng, lat }
+                    geo_types::Coord { x: lng, y: lat }
                 })
-                .collect::<Vec<LatLng>>();
+                .collect();
+
+            let line = geo_types::LineString::new(coords);
+            let wkt = format!(
+                "LINESTRING({})",
+                line.0
+                    .iter()
+                    .map(|c| format!("{} {}", c.x, c.y))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
 
             let inserted_route_paths_result = sqlx::query!(
                 r#"
                         INSERT INTO route_paths (route_code, path, city)
-                        VALUES ($1, $2, $3)
+                        VALUES ($1, ST_GeomFromText($2, 4326), $3)
                         ON CONFLICT (route_code, city)
                         DO UPDATE SET path = EXCLUDED.path
                     "#,
                 route_code,
-                serde_json::to_value(&lat_lng_list)?,
+                wkt,
                 "istanbul",
             )
             .execute(db)
