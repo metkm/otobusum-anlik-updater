@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO timetable (route_code, city, sunday, monday, tuesday, wednesday, thursday, friday, saturday)\n                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n                    ON CONFLICT (route_code, city) DO UPDATE SET\n                        sunday=EXCLUDED.sunday,\n                        monday=EXCLUDED.monday,\n                        tuesday=EXCLUDED.tuesday,\n                        wednesday=EXCLUDED.wednesday,\n                        thursday=EXCLUDED.thursday,\n                        friday=EXCLUDED.friday,\n                        saturday=EXCLUDED.saturday\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TimeArray",
+        "TimeArray",
+        "TimeArray",
+        "TimeArray",
+        "TimeArray",
+        "TimeArray",
+        "TimeArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2bd350880f7213e2b1852f024889867acd3466f11cb52250b40a109f584fb394"
+}

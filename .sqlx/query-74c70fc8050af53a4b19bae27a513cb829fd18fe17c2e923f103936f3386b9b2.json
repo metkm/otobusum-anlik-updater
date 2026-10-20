@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        INSERT INTO route_paths (route_code, path, city)\n                        VALUES ($1, ST_GeomFromText($2, 4326), $3)\n                        ON CONFLICT (route_code, city)\n                        DO UPDATE SET path = EXCLUDED.path\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74c70fc8050af53a4b19bae27a513cb829fd18fe17c2e923f103936f3386b9b2"
+}

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        INSERT INTO\n                            route_paths (route_code, path, city)\n                        VALUES\n                            ($1, $2, $3)\n                        ON CONFLICT (route_code, city) DO UPDATE SET\n                            path=EXCLUDED.path\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "geometry",
+            "kind": "Simple"
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6518e1c976730202d4ac4d9bec4497691a6694785641e1a4b1faa5d62930a52b"
+}
