@@ -469,7 +469,7 @@ impl Updater for IstUpdater {
             geojson_missing_route_codes.len()
         );
 
-        for (index, route_code) in db_route_codes.into_iter().skip(offset).enumerate() {
+        for (index, route_code) in geojson_missing_route_codes.into_iter().skip(offset).enumerate() {
             info!("{}: getting route path for {}", index, route_code);
 
             let Ok(response) = rq
