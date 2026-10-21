@@ -7,16 +7,16 @@ use chrono::NaiveDateTime;
 use convert_case::{Case, Casing};
 use regex::Regex;
 use reqwest::header::HeaderMap;
-use sqlx::{PgPool, QueryBuilder, types::Json};
+use sqlx::{PgPool, QueryBuilder};
 use tracing::{info, warn};
 
 use crate::{
     constants::SLEEP_DURATION,
     models::{
-        database::{DatabaseLine, DatabaseRoute, DatabaseTimetable, LatLng},
+        database::{DatabaseLine, DatabaseRoute, DatabaseTimetable},
         ist::{
             DayType, IstLineRoutesResponse, IstLineStopsResponse, IstRoutePathGeoJson,
-            IstRoutePathGeoJsonFeature, IstRoutePathResponse, IstTimetableResponse,
+            IstRoutePathResponse, IstTimetableResponse,
             IstTokensResponse,
         },
         soap::{BusLineResponseSoap, BusLineSoap},
@@ -363,8 +363,8 @@ impl Updater for IstUpdater {
         rq: &RequestClient<Self>,
         offset: usize,
     ) -> Result<(), anyhow::Error> {
-        // let file_path = std::path::Path::new("./data/path.geojson");
-        // std::fs::create_dir(std::path::Path::new("./data")).ok();
+        let file_path = std::path::Path::new("./data/path.geojson");
+        std::fs::create_dir(std::path::Path::new("./data")).ok();
 
         let re = Regex::new(r#"(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)"#).unwrap();
 
@@ -387,91 +387,89 @@ impl Updater for IstUpdater {
         .fetch_all(db)
         .await?;
 
-        // let geojson: IstRoutePathGeoJson = {
-        //     if !std::path::Path::exists(file_path) {
-        //         info!("downloading geojson file because It's not found");
+        let geojson: IstRoutePathGeoJson = {
+            if !std::path::Path::exists(file_path) {
+                info!("downloading geojson file because It's not found");
 
-        //         let response = rq
-        //             .request(|http, _| {
-        //                 http.get("https://data.ibb.gov.tr/dataset/iett-hat-guzergahlari/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/geojson_download")
-        //             }).await?;
+                let response = rq
+                    .request(|http, _| {
+                        http.get("https://data.ibb.gov.tr/dataset/iett-hat-guzergahlari/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/geojson_download")
+                    }).await?;
 
-        //         let response_body = response.bytes().await?;
+                let response_body = response.bytes().await?;
 
-        //         let mut out = std::fs::File::create("./data/path.geojson")?;
-        //         out.write_all(&response_body)?;
+                let mut out = std::fs::File::create("./data/path.geojson")?;
+                out.write_all(&response_body)?;
 
-        //         serde_json::from_slice(&response_body.slice(..))?
-        //     } else {
-        //         info!("parsing geojson file");
+                serde_json::from_slice(&response_body.slice(..))?
+            } else {
+                info!("parsing geojson file");
 
-        //         let mut file = std::fs::File::open(file_path)?;
-        //         let mut buffer = String::with_capacity(1_000_000);
+                let mut file = std::fs::File::open(file_path)?;
+                let mut buffer = String::with_capacity(1_000_000);
 
-        //         file.read_to_string(&mut buffer)?;
-        //         serde_json::from_str(&buffer)?
-        //     }
-        // };
+                file.read_to_string(&mut buffer)?;
+                serde_json::from_str(&buffer)?
+            }
+        };
 
         let db_route_codes: Vec<String> = routes
             .into_iter()
             .filter_map(|rout| rout.route_code)
             .collect();
 
-        // let geojson_route_codes: Vec<String> = geojson
-        //     .features
-        //     .iter()
-        //     .map(|x| x.properties.route_code.clone())
-        //     .collect();
+        let geojson_route_codes: Vec<String> = geojson
+            .features
+            .iter()
+            .map(|x| x.properties.route_code.clone())
+            .collect();
 
-        // let filtered_geojson_route_paths: Vec<&IstRoutePathGeoJsonFeature> = geojson
-        //     .features
-        //     .iter()
-        //     .filter(|feat| db_route_codes.contains(&feat.properties.route_code))
-        //     .collect();
+        let geojson_missing_route_codes: Vec<&String> = db_route_codes
+            .iter()
+            .filter(|x| !geojson_route_codes.contains(*x))
+            .collect();
 
-        // let geojson_missing_route_codes: Vec<&String> = db_route_codes
-        //     .iter()
-        //     .filter(|x| !geojson_route_codes.contains(*x))
-        //     .collect();
+        let inserted_using_geojson_file_count =
+            QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
+                .push_values(geojson.features, |mut b, record| {
+                    let coords: Vec<geo_types::Coord<f64>> = record
+                        .geometry
+                        .coordinates
+                        .iter()
+                        .map(|x| {
+                            let lng = x[0];
+                            let lat = x[1];
 
-        // if !filtered_geojson_route_paths.is_empty() {
-        //     let inserted_using_geojson_file_count =
-        //         QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
-        //             .push_values(filtered_geojson_route_paths, |mut b, record| {
-        //                 let coords = record
-        //                     .geometry
-        //                     .coordinates
-        //                     .iter()
-        //                     .map(|coord| LatLng {
-        //                         lng: *coord.first().unwrap(),
-        //                         lat: *coord.get(1).unwrap(),
-        //                     })
-        //                     .collect::<Vec<LatLng>>();
+                            geo_types::Coord { x: lng, y: lat }
+                        })
+                        .collect();
 
-        //                 b.push_bind(record.properties.route_code.clone())
-        //                     .push_bind(Json(coords))
-        //                     .push_bind("istanbul");
-        //             })
-        //             .push(
-        //                 "ON CONFLICT (route_code, city) DO UPDATE SET
-        //                     path=EXCLUDED.path
-        //         ",
-        //             )
-        //             .build()
-        //             .execute(db)
-        //             .await?;
 
-        //     info!(
-        //         "inserted {} records using the geojson file",
-        //         inserted_using_geojson_file_count.rows_affected()
-        //     );
-        // }
+                    let line = geo_types::LineString::new(coords);
+                    let geo = geo_types::Geometry::LineString(line);
 
-        // info!(
-        //     "{} route paths missing from the geojson file. Using web api to get them.",
-        //     geojson_missing_route_codes.len()
-        // );
+                    b.push_bind(record.properties.route_code.clone())
+                        .push_bind(geozero::wkb::Encode(geo))
+                        .push_bind("istanbul");
+                })
+                .push(
+                    "ON CONFLICT (route_code, city) DO UPDATE SET
+                        path=EXCLUDED.path
+            ",
+                )
+                .build()
+                .execute(db)
+                .await?;
+
+        info!(
+            "inserted {} records using the geojson file",
+            inserted_using_geojson_file_count.rows_affected()
+        );
+
+        info!(
+            "{} route paths missing from the geojson file. Using web api to get them.",
+            geojson_missing_route_codes.len()
+        );
 
         for (index, route_code) in db_route_codes
             .into_iter()
@@ -517,24 +515,17 @@ impl Updater for IstUpdater {
                 .collect();
 
             let line = geo_types::LineString::new(coords);
-            let wkt = format!(
-                "LINESTRING({})",
-                line.0
-                    .iter()
-                    .map(|c| format!("{} {}", c.x, c.y))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
+            let geo = geo_types::Geometry::LineString(line);
 
             let inserted_route_paths_result = sqlx::query!(
                 r#"
                         INSERT INTO route_paths (route_code, path, city)
-                        VALUES ($1, ST_GeomFromText($2, 4326), $3)
+                        VALUES ($1, $2, $3)
                         ON CONFLICT (route_code, city)
                         DO UPDATE SET path = EXCLUDED.path
                     "#,
                 route_code,
-                wkt,
+                geozero::wkb::Encode(geo) as _,
                 "istanbul",
             )
             .execute(db)
