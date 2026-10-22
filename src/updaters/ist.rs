@@ -412,25 +412,9 @@ impl Updater for IstUpdater {
             }
         };
 
-        let db_route_codes: Vec<String> = routes
-            .into_iter()
-            .filter_map(|rout| rout.route_code)
-            .collect();
-
-        let geojson_route_codes: Vec<String> = geojson
-            .features
-            .iter()
-            .map(|x| x.properties.route_code.clone())
-            .collect();
-
-        let geojson_missing_route_codes: Vec<&String> = db_route_codes
-            .iter()
-            .filter(|x| !geojson_route_codes.contains(*x))
-            .collect();
-
         let inserted_using_geojson_file_count =
             QueryBuilder::new("INSERT INTO route_paths (route_code, path, city)")
-                .push_values(geojson.features, |mut b, record| {
+                .push_values(&geojson.features, |mut b, record| {
                     let coords: Vec<geo_types::Coord<f64>> = record
                         .geometry
                         .coordinates
@@ -464,12 +448,32 @@ impl Updater for IstUpdater {
             inserted_using_geojson_file_count.rows_affected()
         );
 
+        let db_route_codes: Vec<String> = routes
+            .into_iter()
+            .filter_map(|rout| rout.route_code)
+            .collect();
+
+        let geojson_route_codes: Vec<String> = geojson
+            .features
+            .iter()
+            .map(|x| x.properties.route_code.clone())
+            .collect();
+
+        let geojson_missing_route_codes: Vec<&String> = db_route_codes
+            .iter()
+            .filter(|x| !geojson_route_codes.contains(*x))
+            .collect();
+
         info!(
             "{} route paths missing from the geojson file. Using web api to get them.",
             geojson_missing_route_codes.len()
         );
 
-        for (index, route_code) in geojson_missing_route_codes.into_iter().skip(offset).enumerate() {
+        for (index, route_code) in geojson_missing_route_codes
+            .into_iter()
+            .skip(offset)
+            .enumerate()
+        {
             info!("{}: getting route path for {}", index, route_code);
 
             let Ok(response) = rq
@@ -495,6 +499,14 @@ impl Updater for IstUpdater {
                 );
                 continue;
             };
+
+            if route_path.line.is_empty() {
+                warn!(
+                    "skipping route path for {} because it's line field is empty.",
+                    route_code
+                );
+                continue;
+            }
 
             let coords: Vec<geo_types::Coord<f64>> = re
                 .captures_iter(&route_path.line)
