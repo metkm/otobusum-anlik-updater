@@ -155,7 +155,7 @@ impl Updater for IzmUpdater {
             }
         }
 
-        let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, title, city)")
+        let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, name, city)")
             .push_values(&lines, |mut b, record| {
                 b.push_bind(record.line_code.to_string());
                 b.push_bind(record.line_name.to_case(Case::Title));
@@ -163,7 +163,7 @@ impl Updater for IzmUpdater {
             })
             .push(
                 "ON CONFLICT (code, city) DO UPDATE SET
-                    title = EXCLUDED.title
+                    name = EXCLUDED.name
             ",
             )
             .build()
@@ -183,7 +183,7 @@ impl Updater for IzmUpdater {
                     DatabaseRoute {
                         agency_id: Some(1),
                         code: Some(line.line_code.to_string()),
-                        title: Some(format!("{} - {}", line.line_start, line.line_end)),
+                        name: Some(format!("{} - {}", line.line_start, line.line_end)),
                         r#type: Some(3),
                         route_code: Some(format!("{}_G_D0", line.line_code)),
                         description: None,
@@ -192,7 +192,7 @@ impl Updater for IzmUpdater {
                     DatabaseRoute {
                         agency_id: Some(1),
                         code: Some(line.line_code.to_string()),
-                        title: Some(format!("{} - {}", line.line_end, line.line_start)),
+                        name: Some(format!("{} - {}", line.line_end, line.line_start)),
                         r#type: Some(3),
                         route_code: Some(format!("{}_D_D0", line.line_code)),
                         description: None,
@@ -203,12 +203,12 @@ impl Updater for IzmUpdater {
             .collect::<Vec<DatabaseRoute>>();
 
         let routes_insert_result = QueryBuilder::new(
-            "INSERT INTO routes (agency_id, code, title, type, description, route_code, city)",
+            "INSERT INTO routes (agency_id, code, name, type, description, route_code, city)",
         )
         .push_values(route_codes, |mut b, record| {
             b.push_bind(record.agency_id);
             b.push_bind(record.code);
-            b.push_bind(record.title);
+            b.push_bind(record.name);
             b.push_bind(record.r#type);
             b.push_bind(record.description);
             b.push_bind(record.route_code);
@@ -219,7 +219,7 @@ impl Updater for IzmUpdater {
                 ON CONFLICT (route_code, city) DO UPDATE SET
                     agency_id=EXCLUDED.agency_id,
                     code=EXCLUDED.code,
-                    title=EXCLUDED.title,
+                    name=EXCLUDED.name,
                     type=EXCLUDED.type,
                     description=EXCLUDED.description,
                     route_code=EXCLUDED.route_code

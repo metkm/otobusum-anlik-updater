@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "title",
+        "name": "name",
         "type_info": "Text"
       },
       {

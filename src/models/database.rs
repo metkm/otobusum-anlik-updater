@@ -5,7 +5,7 @@ use sqlx::types::chrono::NaiveTime;
 pub struct DatabaseRoute {
     pub agency_id: Option<i32>,
     pub code: Option<String>,
-    pub title: Option<String>,
+    pub name: Option<String>,
     pub r#type: Option<i32>,
     pub description: Option<String>,
     pub route_code: Option<String>,
@@ -16,7 +16,7 @@ pub struct DatabaseRoute {
 pub struct DatabaseLine {
     pub id: i32,
     pub code: String,
-    pub title: String,
+    pub name: String,
     pub city: String,
 }
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                agency_id,\n                code,\n                title,\n                type,\n                description,\n                route_code,\n                city\n            FROM\n                routes\n            WHERE\n                city = 'istanbul' AND route_code NOT IN (SELECT route_code FROM route_paths)\n            ",
+  "query": "SELECT\n                agency_id,\n                code,\n                name,\n                type,\n                description,\n                route_code,\n                city\n            FROM\n                routes\n            WHERE\n                city = 'istanbul'\n            ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "title",
+        "name": "name",
         "type_info": "Text"
       },
       {
@@ -52,5 +52,5 @@
       false
     ]
   },
-  "hash": "90a7e9d422aa17adcb08b6409fb4c5c2b43c90edbb6ea7af611ed27ef311283e"
+  "hash": "32e53be1ca2b8dfcb0ec33636242d78a56e89f45593f0ce327c39ef9686f0855"
 }

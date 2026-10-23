@@ -104,7 +104,7 @@ impl Updater for IstUpdater {
         let parsed = serde_xml_rs::from_str::<BusLineResponseSoap>(&text)?;
         let bus_lines = serde_json::from_str::<Vec<BusLineSoap>>(&parsed.content.content.content)?;
 
-        let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, title, city)")
+        let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, name, city)")
             .push_values(bus_lines, |mut b, new_line| {
                 b.push_bind(new_line.line_code);
                 b.push_bind(new_line.line_name.to_case(Case::Title));
@@ -112,7 +112,7 @@ impl Updater for IstUpdater {
             })
             .push(
                 "ON CONFLICT (code, city) DO UPDATE SET
-                    title = EXCLUDED.title
+                    name = EXCLUDED.name
             ",
             )
             .build()
@@ -180,7 +180,7 @@ impl Updater for IstUpdater {
                 }
 
                 let routes_insert_result = QueryBuilder::new(
-                    "INSERT INTO routes (agency_id, code, title, type, route_code, city)",
+                    "INSERT INTO routes (agency_id, code, name, type, route_code, city)",
                 )
                 .push_values(line_routes, |mut b, record| {
                     b.push_bind(1)
@@ -201,7 +201,7 @@ impl Updater for IstUpdater {
                     ON CONFLICT (route_code, city) DO UPDATE SET
                         agency_id=EXCLUDED.agency_id,
                         code=EXCLUDED.code,
-                        title=EXCLUDED.title,
+                        name=EXCLUDED.name,
                         type=EXCLUDED.type,
                         route_code=EXCLUDED.route_code
                 ",
@@ -379,7 +379,7 @@ impl Updater for IstUpdater {
             "SELECT
                 agency_id,
                 code,
-                title,
+                name,
                 type,
                 description,
                 route_code,
