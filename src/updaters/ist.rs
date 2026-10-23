@@ -320,13 +320,19 @@ impl Updater for IstUpdater {
                 );
 
                 let insert_stops_result = QueryBuilder::new(
-                    "INSERT INTO stops (stop_code, name, lng, lat, province, city)",
+                    "INSERT INTO stops (stop_code, name, lng, lat, location, province, city)",
                 )
                 .push_values(&stops, |mut b, record| {
+                    let location = geo_types::Geometry::Point(geo_types::Point(geo_types::Coord {
+                        x: record.stop_geo.x,
+                        y: record.stop_geo.y
+                    }));
+
                     b.push_bind(record.stop_code)
                         .push_bind(record.name.to_case(Case::Title))
                         .push_bind(record.stop_geo.x)
                         .push_bind(record.stop_geo.y)
+                        .push_bind(geozero::wkb::Encode(location))
                         .push_bind(&record.province)
                         .push_bind("istanbul");
                 })
@@ -335,7 +341,8 @@ impl Updater for IstUpdater {
                     ON CONFLICT (stop_code, city) DO UPDATE SET
                         name=EXCLUDED.name,
                         lng=EXCLUDED.lng,
-                        lat=EXCLUDED.lat
+                        lat=EXCLUDED.lat,
+                        location=EXCLUDED.location
                 ",
                 )
                 .build()
