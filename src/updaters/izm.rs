@@ -1,7 +1,8 @@
 use std::{collections::HashSet, str::FromStr};
 
 use chrono::NaiveTime;
-use convert_case::{Case, Casing};
+use icu::locale::langid;
+use icu_casemap::TitlecaseMapper;
 use reqwest::header::HeaderMap;
 use sqlx::{PgPool, QueryBuilder, types::Json};
 use tracing::{info, warn};
@@ -39,53 +40,6 @@ impl IzmUpdater {
 
 impl Updater for IzmUpdater {
     type Item = Self;
-
-    // async fn get_credentials(&mut self) -> Result<(), reqwest::Error> {
-    //     let login_body = IzmLoginBody {
-    //         user_name: "tur".to_string(),
-    //         password: "t@r!".to_string(),
-    //     };
-
-    //     info!("getting login tokens");
-    //     let login_response = self
-    //         .client
-    //         .post("https://appapi.eshot.gov.tr/api/Transportation/Login")
-    //         .headers(self.headers.clone())
-    //         .json(&login_body)
-    //         .send()
-    //         .await?
-    //         .json::<IzmLoginBodyResponse>()
-    //         .await?;
-
-    //     info!("{:?}", login_response);
-
-    //     self.headers.insert(
-    //         "Authorization",
-    //         format!("Bearer {}", login_response.data.token)
-    //             .parse()
-    //             .unwrap(),
-    //     );
-
-    //     info!("getting anonymous user using login token");
-    //     let anonymous_response = self
-    //         .client
-    //         .get("https://appapi.eshot.gov.tr/api/TransportationUser/getAnonymousUser")
-    //         .headers(self.headers.clone())
-    //         .send()
-    //         .await?
-    //         .json::<IzmLoginBodyResponse>()
-    //         .await?;
-
-    //     self.headers.insert(
-    //         "Authorization",
-    //         format!("Bearer {}", anonymous_response.data.token)
-    //             .parse()
-    //             .unwrap(),
-    //     );
-
-    //     info!("got tokens");
-    //     Ok(())
-    // }
 
     async fn authorize(&self) -> Result<crate::models::token::Token, anyhow::Error> {
         let client = reqwest::Client::new();
@@ -154,11 +108,13 @@ impl Updater for IzmUpdater {
                 stop = true;
             }
         }
+        
+        let mapper = TitlecaseMapper::new();
 
         let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, name, city)")
             .push_values(&lines, |mut b, record| {
                 b.push_bind(record.line_code.to_string());
-                b.push_bind(record.line_name.to_case(Case::Title));
+                b.push_bind(String::from(mapper.titlecase_segment_to_string(&record.line_name, &langid!("tr-TR"), Default::default())));
                 b.push_bind("izmir");
             })
             .push(
@@ -317,6 +273,8 @@ impl Updater for IzmUpdater {
                 .json::<EshotLineResponse>()
                 .await?;
 
+            let mapper = TitlecaseMapper::new();
+
             for route in line_data.data {
                 let route_code = format!(
                     "{}_{:?}_D0",
@@ -345,7 +303,7 @@ impl Updater for IzmUpdater {
                 )
                 .push_values(&stops, |mut b, station| {
                     b.push_bind(station.id)
-                        .push_bind(station.name.to_case(Case::Title))
+                        .push_bind(String::from(mapper.titlecase_segment_to_string(&station.name, &langid!("tr-TR"), Default::default())))
                         .push_bind(station.lng)
                         .push_bind(station.lat)
                         .push_bind("izmir");

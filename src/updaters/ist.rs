@@ -4,7 +4,8 @@ use std::{
 };
 
 use chrono::NaiveDateTime;
-use convert_case::{Case, Casing};
+use icu::locale::langid;
+use icu_casemap::TitlecaseMapper;
 use regex::Regex;
 use reqwest::header::HeaderMap;
 use sqlx::{PgPool, QueryBuilder};
@@ -104,10 +105,12 @@ impl Updater for IstUpdater {
         let parsed = serde_xml_rs::from_str::<BusLineResponseSoap>(&text)?;
         let bus_lines = serde_json::from_str::<Vec<BusLineSoap>>(&parsed.content.content.content)?;
 
+        let mapper = TitlecaseMapper::new();
+
         let lines_insert_result = QueryBuilder::new("INSERT INTO lines (code, name, city)")
             .push_values(bus_lines, |mut b, new_line| {
                 b.push_bind(new_line.line_code);
-                b.push_bind(new_line.line_name.to_case(Case::Title));
+                b.push_bind(String::from(mapper.titlecase_segment_to_string(&new_line.line_name, &langid!("tr-TR"), Default::default())));
                 b.push_bind("istanbul");
             })
             .push(
@@ -319,6 +322,8 @@ impl Updater for IstUpdater {
                     &line.code
                 );
 
+                let mapper = TitlecaseMapper::new();
+
                 let insert_stops_result = QueryBuilder::new(
                     "INSERT INTO stops (stop_code, name, lng, lat, location, province, city)",
                 )
@@ -329,7 +334,7 @@ impl Updater for IstUpdater {
                     }));
 
                     b.push_bind(record.stop_code)
-                        .push_bind(record.name.to_case(Case::Title))
+                        .push_bind(String::from(mapper.titlecase_segment_to_string(&record.name, &langid!("tr-TR"), Default::default())))
                         .push_bind(record.stop_geo.x)
                         .push_bind(record.stop_geo.y)
                         .push_bind(geozero::wkb::Encode(location))
